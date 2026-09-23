@@ -1,4 +1,5 @@
 import * as CANNON from 'cannon-es';
+import { VEHICLE } from './vehicle-config';
 
 export type Gear = 'D' | 'N' | 'R';
 export interface DrivingInput {
@@ -21,6 +22,7 @@ export class DrivingPhysics {
   gear: Gear = 'D';
   throttle = 0;
   brake = 0;
+  private accumulator = 0;
   private readonly forward = new CANNON.Vec3();
 
   constructor() {
@@ -36,7 +38,7 @@ export class DrivingPhysics {
     this.world.addBody(ground);
     this.chassis = new CANNON.Body({
       mass: 1200,
-      shape: new CANNON.Box(new CANNON.Vec3(0.86, 0.25, 2.05)),
+      shape: new CANNON.Box(new CANNON.Vec3(VEHICLE.width / 2, 0.25, VEHICLE.length / 2)),
       position: new CANNON.Vec3(0, 0.65, 0),
       linearDamping: 0.08,
       angularDamping: 0.45,
@@ -55,8 +57,8 @@ export class DrivingPhysics {
       indexForwardAxis: 2,
     });
     const positions = [
-      [-0.84, -0.29, -1.155], [0.83, -0.29, -1.155],
-      [-0.82, -0.29, 1.495], [0.82, -0.29, 1.495],
+      [-0.84, -0.29, VEHICLE.frontAxle], [0.83, -0.29, VEHICLE.frontAxle],
+      [-0.82, -0.29, VEHICLE.rearAxle], [0.82, -0.29, VEHICLE.rearAxle],
     ];
     positions.forEach(([x, y, z], index) => this.vehicle.addWheel({
       chassisConnectionPointLocal: new CANNON.Vec3(x, y, z),
@@ -102,8 +104,9 @@ export class DrivingPhysics {
     return true;
   }
 
-  reset(): void {
-    this.chassis.position.set(0, 0.65, 0);
+  reset(x = 0, z = 0): void {
+    this.accumulator = 0;
+    this.chassis.position.set(x, 0.65, z);
     this.chassis.quaternion.set(0, 0, 0, 1);
     this.chassis.previousPosition.copy(this.chassis.position);
     this.chassis.interpolatedPosition.copy(this.chassis.position);
@@ -134,15 +137,26 @@ export class DrivingPhysics {
     });
   }
 
-  update(dt: number, input: DrivingInput): void {
+  clearAccumulator(): void { this.accumulator = 0; }
+
+  update(dt: number, input: DrivingInput, afterStep?: () => boolean | void): void {
+    this.accumulator += clamp(dt, 0, .05);
+    while (this.accumulator + 1e-10 >= 1 / 60) {
+      this.accumulator -= 1 / 60;
+      this.step(input);
+      if (afterStep?.() === false) { this.accumulator = 0; break; }
+    }
+  }
+
+  private step(input: DrivingInput): void {
     this.throttle = clamp(input.throttle, 0, 1);
     this.brake = clamp(input.brake, 0, 1);
     this.measureSpeed();
-    // Reduce steering at road speed; full parking lock is 30 degrees.
-    this.steering = clamp(input.steer, -1, 1) * (Math.PI / 6) /
+    // Parking lock; speed-sensitive steering within the low-speed exam range.
+    this.steering = clamp(input.steer, -1, 1) * VEHICLE.steeringLock /
       (1 + Math.abs(this.speed) * 0.065);
     const direction = this.gear === 'D' ? 1 : this.gear === 'R' ? -1 : 0;
-    const limit = this.gear === 'R' ? 5 : 12.5;
+    const limit = VEHICLE.maxSpeed;
     const power = 2100 * this.throttle * (1 - this.brake) *
       Math.max(0, 1 - Math.pow(Math.max(0, this.speed * direction) / limit, 4));
     for (let i = 0; i < 4; i++) {
@@ -151,7 +165,7 @@ export class DrivingPhysics {
       this.vehicle.setSteeringValue(i < 2 ? this.steering : 0, i);
       this.vehicle.setBrake(this.brake * 100, i);
     }
-    this.world.step(1 / 60, clamp(dt, 0, 0.05), 3);
+    this.world.step(1 / 60);
     this.measureSpeed();
   }
 

@@ -5,7 +5,11 @@ const browser=await chromium.launch({channel:'chrome',headless:true,args:['--ena
 const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
 const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
 await page.goto('http://127.0.0.1:5173/car-drive-3d/');await page.waitForFunction(()=>window.larria?.ready,{timeout:60000});await page.waitForTimeout(3000);
-await page.screenshot({path:'artifacts/exterior.png'});
-await page.getByRole('button',{name:'◉ 驾驶座舱'}).click();await page.waitForTimeout(1200);await page.screenshot({path:'artifacts/cockpit.png'});
+await page.screenshot({path:'artifacts/projects.png'});
+await page.locator('[data-exam="select"]').click();
+await page.locator('[data-exam="start"]').click();
+await page.waitForTimeout(500);await page.screenshot({path:'artifacts/cockpit.png'});
+await page.locator('button[data-view="orbit"]').click();
+await page.waitForTimeout(500);await page.screenshot({path:'artifacts/exterior.png'});
 console.log(JSON.stringify({errors,fps:await page.locator('#fps').textContent(),car:await page.evaluate(()=>{const a=window.larria;return{pos:a.car.root.position,eye:a.camera.position,render:a.renderer.info.render}})}));
 await browser.close();

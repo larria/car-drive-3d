@@ -90,4 +90,24 @@ test('manifest, installation UI, precached model and offline reload', async ({ p
   expect(offlineResources.every(resource => resource.ok && resource.bytes > 1000)).toBe(true);
   await page.locator('#pwa-update').click();
   await expect(page.locator('#pwa-dialog')).toContainText('离线状态');
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.waitForFunction(() => window.larria?.ready);
+  await page.locator('[data-exam=select]').click();
+  await page.locator('[data-exam=start]').click();
+  await expect(page.locator('body')).toHaveAttribute('data-exam', 'running');
+  await expect(page.locator('body')).toHaveAttribute('data-view', 'cockpit');
+  await page.screenshot({path:'artifacts/exam-offline.png'});
+});
+
+
+test('running and paused exams block updates even at zero speed', async ({ page }) => {
+  await mockedPwa(page);
+  for (const state of ['running', 'paused']) {
+    await page.evaluate(state => { document.body.dataset.exam = state; window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); window.pwaCallbacks.onNeedReload(); }, state);
+    await expect(page.locator('#pwa-dialog')).not.toBeVisible();
+    expect(await page.evaluate(() => isSafeToRefresh())).toBe(false);
+    expect(page.url()).toContain('pwa-fixture.html');
+  }
+  await page.evaluate(() => { document.body.dataset.exam = 'projects'; });
+  expect(await page.evaluate(() => isSafeToRefresh())).toBe(true);
 });

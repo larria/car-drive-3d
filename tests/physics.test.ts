@@ -72,15 +72,15 @@ describe('DrivingPhysics real fixed-step simulation', () => {
     expect(car.setGear('D')).toBe(false);
   });
 
-  it('neutral has no engine force and full throttle levels near 45 km/h', () => {
+  it('neutral has no engine force and full throttle stays in the 16.6 km/h exam range', () => {
     const car = new DrivingPhysics();
     car.setGear('N');
     run(car, 180, { ...idle, throttle: 1 });
     expect(Math.abs(car.speed)).toBeLessThan(0.01);
     car.setGear('D');
     run(car, 1800, { ...idle, throttle: 1 });
-    expect(car.speed * 3.6).toBeGreaterThan(40);
-    expect(car.speed * 3.6).toBeLessThan(46);
+    expect(car.speed * 3.6).toBeGreaterThan(15);
+    expect(car.speed * 3.6).toBeLessThan(16.7);
   });
 
   it('collides with boundary boxes instead of passing through', () => {
@@ -118,6 +118,7 @@ describe('DrivingPhysics real fixed-step simulation', () => {
     expect(a.throttle).toBe(1);
     expect(a.brake).toBe(0);
     a.update(NaN, { throttle: NaN, brake: Infinity, steer: NaN });
+    a.update(1 / 60, { throttle: NaN, brake: Infinity, steer: NaN });
     expect(Number.isFinite(a.speed)).toBe(true);
     expect(a.throttle).toBe(0);
     expect(a.steering).toBe(0);

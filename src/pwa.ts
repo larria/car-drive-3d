@@ -11,6 +11,7 @@ type DrivingWindow = Window & {
 
 // Missing telemetry is treated conservatively: never refresh an uninitialised scene.
 export function isSafeToRefresh(): boolean {
+  if (['running', 'paused'].includes(document.body.dataset.exam ?? '')) return false;
   const host = window as DrivingWindow;
   const speeds = [host.larria?.physics?.speed, host.apex?.physics?.speed]
     .filter((speed): speed is number => speed !== undefined);
@@ -57,7 +58,7 @@ export function initPwa(): void {
     message.textContent = text;
     confirm.hidden = !update;
     check.title = text;
-    if (modal && !dialog.open) dialog.showModal();
+    if (modal && !['running','paused'].includes(document.body.dataset.exam ?? '') && !dialog.open) dialog.showModal();
   }
   function errorText(error: unknown) {
     return error instanceof Error ? error.message : String(error);
@@ -108,7 +109,7 @@ export function initPwa(): void {
   let reloading = false;
   let activating = false;
   let activationTimer: ReturnType<typeof setTimeout> | undefined;
-  const updateMessage = '新版本已准备好。请先停车，再点击“停车后更新”。更新会重新加载页面。';
+  const updateMessage = '新版本已准备好。请先退出考试并停车，再点击“停车后更新”。更新会重新加载页面。';
 
   function reloadWithConsent() {
     // onNeedReload overrides the plugin's unconditional reload, including updates from other tabs.

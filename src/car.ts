@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { ferrariViewProfile } from './ferrari-view-profile';
 
 export async function loadCar() {
   const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
@@ -51,7 +52,7 @@ export async function loadCar() {
     const light=new THREE.Mesh(new THREE.BoxGeometry(.11,.025,.012),new THREE.MeshStandardMaterial({color:0xd9e1d9,emissive:0xffffff,emissiveIntensity:0}));light.position.set(x,.55,2.05);root.add(light);return light;
   });
   let roll=0;
-  return {root,paint,glass,update(speed:number,steer:number,brake:number,throttle:number,gear:string,dt:number){
+  return {root,paint,glass,profile:ferrariViewProfile(root),update(speed:number,steer:number,brake:number,throttle:number,gear:string,dt:number){
     roll-=speed*dt/.35;
     wheels.forEach(({pivot,wheel,base},i)=>{pivot.rotation.y=i<2?steer:0;wheel.quaternion.copy(base).premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),roll));});
     steering.quaternion.copy(steeringBase).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-steer*12));

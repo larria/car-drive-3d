@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RIGHT_ANGLE } from './courses/right-angle';
 
 export type WorldWall = { x: number; y: number; z: number; sx: number; sy: number; sz: number };
 
@@ -104,27 +105,6 @@ export function createWorld(scene: THREE.Scene): { walls: WorldWall[] } {
   // Continuous flush apron beyond the court, below the driving surface.
   block(concreteLight, 0, -0.13, 0, 112, 0.2, 112, false);
 
-  // The starting area and the entire central northbound corridor stay clear.
-  solid(concrete, -50.4, 0.48, 0, 0.8, 0.96, 101.6);
-  solid(concrete, 50.4, 0.48, 0, 0.8, 0.96, 101.6);
-  solid(concrete, 0, 0.48, -50.4, 100, 0.96, 0.8);
-  solid(concrete, 0, 0.48, 50.4, 100, 0.96, 0.8);
-  for (const x of [-50.4, 50.4]) block(concreteLight, x, 0.99, 0, 0.94, 0.08, 102);
-  for (const z of [-50.4, 50.4]) block(concreteLight, 0, 0.99, z, 100, 0.08, 0.94);
-  for (let p = -45; p <= 45; p += 5) {
-    for (const x of [-49.985, 49.985]) block(charcoal, x, 0.47, p, 0.012, 0.79, 0.025, false);
-    block(charcoal, p, 0.47, -49.985, 0.025, 0.79, 0.012, false);
-  }
-  line(-47.7, 0, 0.12, 95);
-  line(47.7, 0, 0.12, 95);
-  line(0, -47.7, 95.4, 0.12);
-  line(0, 47.7, 95.4, 0.12);
-  for (let z = -43; z <= 43; z += 7) {
-    line(-0.18, z, 0.11, 3.8, yellow);
-    line(0.18, z, 0.11, 3.8, yellow);
-  }
-  for (const x of [-9, 9]) line(x, -7, 0.13, 73);
-
   // Typography is painted, not a UI overlay. Shared atlases keep numbered bays inexpensive.
   const font = '"Arial", "Helvetica Neue", "PingFang SC", sans-serif';
   function groundText(text: string, x: number, z: number, width: number, depth: number, color = '#d5d6cd') {
@@ -142,71 +122,25 @@ export function createWorld(scene: THREE.Scene): { walls: WorldWall[] } {
     mesh.receiveShadow = true;
     world.add(mesh);
   }
-  groundText('LARRIA', 0, -32, 15, 5.3);
-  groundText('DRIVE LAB', 0, -26.5, 12, 2);
-  groundText('PRECISION / 01', -29, 27.5, 16, 1.7);
-  groundText('CONTROL / 02', 29, 27.5, 16, 1.7);
-  groundText('START', 0, 11.5, 6, 1.6, '#b4b8b1');
-  line(0, 9.5, 14, 0.2);
-
-  const numbers = canvas(1024, 512);
-  numbers.ctx.fillStyle = '#cbd0c9';
-  numbers.ctx.textAlign = 'center';
-  numbers.ctx.textBaseline = 'middle';
-  numbers.ctx.font = `600 72px ${font}`;
-  for (let i = 0; i < 16; i++) numbers.ctx.fillText(String(i + 1).padStart(2, '0'), (i % 4) * 256 + 128, Math.floor(i / 4) * 128 + 64);
-  const numberMat = new THREE.MeshStandardMaterial({ map: texture(numbers.el), transparent: true, depthWrite: false, roughness: 1 });
-  const positions: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-  let bayIndex = 0;
-  for (const side of [-1, 1]) {
-    const centerX = side * 39;
-    line(side * 45, -9, 0.12, 56);
-    for (let i = 0; i <= 8; i++) line(centerX, -37 + i * 7, 12, 0.12);
-    for (let i = 0; i < 8; i++) {
-      const z = -33.5 + i * 7;
-      const x = side * 35;
-      const base = positions.length / 3;
-      positions.push(x - 1.1, 0.03, z + 0.6, x + 1.1, 0.03, z + 0.6, x + 1.1, 0.03, z - 0.6, x - 1.1, 0.03, z - 0.6);
-      const u = (bayIndex % 4) / 4;
-      const v = 1 - (Math.floor(bayIndex / 4) + 1) / 4;
-      uvs.push(u, v, u + 0.25, v, u + 0.25, v + 0.25, u, v + 0.25);
-      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      bayIndex++;
-    }
-  }
-  const numberGeometry = new THREE.BufferGeometry();
-  numberGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  numberGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  numberGeometry.setIndex(indices);
-  numberGeometry.computeVertexNormals();
-  const numberMesh = new THREE.Mesh(numberGeometry, numberMat);
-  numberMesh.receiveShadow = true;
-  world.add(numberMesh);
-
-  function trafficCone(x: number, z: number) {
-    block(charcoal, x, 0.06, z, 0.66, 0.12, 0.66);
-    instance(cone, orange, x, 0.55, z);
-    instance(coneStripe, white, x, 0.63, z);
-  }
-  // Low-speed manoeuvre pockets are off-axis; cones are soft markers, not solid walls.
-  for (const side of [-1, 1]) {
-    const x = side * 28;
-    for (let i = 0; i < 5; i++) trafficCone(x + Math.sin(i * 1.6) * 2.7, -27 + i * 9);
-    for (const z of [32, 42]) line(side * 29, z, 25, 0.12);
-    line(side * 41.5, 37, 0.12, 10);
-    line(side * 16.5, 37, 0.12, 10);
-    for (let i = 0; i < 6; i++) line(side * (18.5 + i * 4), 39.5, 0.1, 4.7, yellow);
-    trafficCone(side * 16.5, 32);
-    trafficCone(side * 41.5, 32);
-  }
-  // Small directional chevrons, all geometry lies flush with the road.
-  for (const z of [-15, 22]) {
-    line(-4.6, z, 0.2, 3.5);
-    instance(box, white, -5.05, 0.018, z - 1.28, 0.16, 0.012, 1.25, -0.8, false);
-    instance(box, white, -4.15, 0.018, z - 1.28, 0.16, 0.012, 1.25, 0.8, false);
-  }
+  // The exam surface and its paint share the exact metre-scale rule geometry.
+  const course = RIGHT_ANGLE;
+  const shape = new THREE.Shape(course.polygon.map(p => new THREE.Vector2(p.x, -p.z)));
+  const road = new THREE.Mesh(new THREE.ShapeGeometry(shape), material('#525b59'));
+  road.rotation.x = -Math.PI / 2; road.position.y = .021; road.receiveShadow = true;
+  world.add(road);
+  const paint = (a: {x:number;z:number}, b: {x:number;z:number}, mat = white) => {
+    block(mat,(a.x+b.x)/2,.04,(a.z+b.z)/2, Math.max(.065,Math.abs(b.x-a.x)),.008,Math.max(.065,Math.abs(b.z-a.z)),false);
+  };
+  course.boundaries.forEach(([a,b])=>paint(a,b));
+  const green = material('#92ba9f');
+  for(let z=-course.width;z<0;z+=.45) paint({x:course.finish[0].x,z},{x:course.finish[0].x,z:Math.min(z+.24,0)},green);
+  paint({x:-course.width/2,z:course.startLine},{x:course.width/2,z:course.startLine},green);
+  for(let z=11.5;z>-course.width/2;z-=1.2)paint({x:0,z},{x:0,z:z-.45},yellow);
+  for(let x=1;x<11;x+=1.2)paint({x,z:-course.width/2},{x:x+.45,z:-course.width/2},yellow);
+  groundText('LARRIA', -9, -6, 10, 2.3);
+  groundText('RIGHT ANGLE / 01', 6, -7, 8, 1);
+  groundText('START',0,11.5,2.6,.6);
+  groundText('FINISH',14,-1.8,2.6,.6);
 
   function tree(x: number, z: number, scale = 1) {
     instance(cylinder, bark, x, 1.9 * scale, z, 0.19 * scale, 3.8 * scale, 0.19 * scale);
