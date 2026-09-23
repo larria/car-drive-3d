@@ -1,4 +1,5 @@
-import { RIGHT_ANGLE, type Point, type Segment } from './courses/right-angle';
+import { RIGHT_ANGLE } from './courses/right-angle';
+import type { CourseDefinition, Point, Segment } from './courses/course-definition';
 import { VEHICLE } from './vehicle-config';
 export const REVERSE_EPS = .0042, STOP_EPS = .021;
 export interface ExamPose { x: number; z: number; yaw: number; speed: number; throttle: boolean }
@@ -15,16 +16,17 @@ export function bodyCorners(p: ExamPose): Point[] {
   });
 }
 export class ExamRules {
+  constructor(readonly course:CourseDefinition=RIGHT_ANGLE) {}
   startedW=false;
   reset(){this.startedW=false;}
   step(p: ExamPose): ExamResult | null {
     if(p.throttle)this.startedW=true;
-    if(p.speed < -REVERSE_EPS)return {passed:false,reason:'中途倒车，考试不合格'};
-    if(this.startedW&&!p.throttle&&p.speed<STOP_EPS)return {passed:false,reason:'中途停车，考试不合格'};
+    if(this.course.rules.noReverse && p.speed < -REVERSE_EPS)return {passed:false,reason:'中途倒车，考试不合格'};
+    if(this.course.rules.noStopAfterGo&&this.startedW&&!p.throttle&&p.speed<STOP_EPS)return {passed:false,reason:'中途停车，考试不合格'};
     const corners=bodyCorners(p);
     const hits=(line:Segment)=>corners.some((a,i)=>intersects(a,corners[(i+1)%4],...line));
-    if(RIGHT_ANGLE.boundaries.some(hits))return {passed:false,reason:'车辆越出边界线'};
-    if(hits(RIGHT_ANGLE.finish))return {passed:true,reason:'车辆顺利通过直角转弯'};
+    if(this.course.boundaries.some(hits))return {passed:false,reason:'车辆越出边界线'};
+    if(hits(this.course.finish))return {passed:true,reason:this.course.passReason};
     return null;
   }
 }

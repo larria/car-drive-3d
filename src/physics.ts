@@ -104,10 +104,10 @@ export class DrivingPhysics {
     return true;
   }
 
-  reset(x = 0, z = 0): void {
+  reset(x = 0, z = 0, yaw = 0): void {
     this.accumulator = 0;
     this.chassis.position.set(x, 0.65, z);
-    this.chassis.quaternion.set(0, 0, 0, 1);
+    this.chassis.quaternion.setFromEuler(0, yaw, 0);
     this.chassis.previousPosition.copy(this.chassis.position);
     this.chassis.interpolatedPosition.copy(this.chassis.position);
     this.chassis.previousQuaternion.copy(this.chassis.quaternion);

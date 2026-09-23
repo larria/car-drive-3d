@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { RIGHT_ANGLE } from './courses/right-angle';
+import type { CourseDefinition, Point } from './courses/course-definition';
 
 export type WorldWall = { x: number; y: number; z: number; sx: number; sy: number; sz: number };
 
 /** A self-contained, metre-scale driving campus. Lighting belongs to the caller. */
-export function createWorld(scene: THREE.Scene): { walls: WorldWall[] } {
+export function createWorld(scene: THREE.Scene) {
   const walls: WorldWall[] = [];
   const world = new THREE.Group();
   world.name = 'LARRIA · Drive Lab';
@@ -122,25 +123,62 @@ export function createWorld(scene: THREE.Scene): { walls: WorldWall[] } {
     mesh.receiveShadow = true;
     world.add(mesh);
   }
-  // The exam surface and its paint share the exact metre-scale rule geometry.
-  const course = RIGHT_ANGLE;
-  const shape = new THREE.Shape(course.polygon.map(p => new THREE.Vector2(p.x, -p.z)));
-  const road = new THREE.Mesh(new THREE.ShapeGeometry(shape), material('#525b59'));
-  road.rotation.x = -Math.PI / 2; road.position.y = .021; road.receiveShadow = true;
-  world.add(road);
-  const paint = (a: {x:number;z:number}, b: {x:number;z:number}, mat = white) => {
-    block(mat,(a.x+b.x)/2,.04,(a.z+b.z)/2, Math.max(.065,Math.abs(b.x-a.x)),.008,Math.max(.065,Math.abs(b.z-a.z)),false);
-  };
-  course.boundaries.forEach(([a,b])=>paint(a,b));
-  const green = material('#92ba9f');
-  for(let z=-course.width;z<0;z+=.45) paint({x:course.finish[0].x,z},{x:course.finish[0].x,z:Math.min(z+.24,0)},green);
-  paint({x:-course.width/2,z:course.startLine},{x:course.width/2,z:course.startLine},green);
-  for(let z=11.5;z>-course.width/2;z-=1.2)paint({x:0,z},{x:0,z:z-.45},yellow);
-  for(let x=1;x<11;x+=1.2)paint({x,z:-course.width/2},{x:x+.45,z:-course.width/2},yellow);
+  // Course-owned resources are replaced without disturbing shared campus assets.
+  let courseGroup = new THREE.Group();
+  function setCourse(course: CourseDefinition) {
+    const geometries=new Set<THREE.BufferGeometry>(), materials=new Set<THREE.Material>(), textures=new Set<THREE.Texture>();
+    courseGroup.traverse(object=>{
+      if(object instanceof THREE.Mesh){
+        geometries.add(object.geometry);
+        for(const mat of Array.isArray(object.material)?object.material:[object.material]){
+          materials.add(mat);
+          for(const value of Object.values(mat))if(value instanceof THREE.Texture)textures.add(value);
+        }
+      }
+    });
+    world.remove(courseGroup);
+    geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());
+    courseGroup=new THREE.Group();courseGroup.name=`course:${course.id}`;world.add(courseGroup);
+    const road=new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(course.polygon.map(p=>new THREE.Vector2(p.x,-p.z)))),material('#525b59'));
+    road.rotation.x=-Math.PI/2;road.position.y=.021;road.receiveShadow=true;courseGroup.add(road);
+    const paintGeometry=new THREE.BoxGeometry(1,1,1);
+    const edgeMaterial=material('#e4e3d8'), guideMaterial=material('#dab851'), markMaterial=material('#92ba9f');
+    const paint=(a:Point,b:Point,mat:THREE.Material=edgeMaterial)=>{
+      const dx=b.x-a.x,dz=b.z-a.z;
+      const mesh=new THREE.Mesh(paintGeometry,mat);
+      mesh.position.set((a.x+b.x)/2,.04,(a.z+b.z)/2);
+      mesh.scale.set(Math.hypot(dx,dz),.008,.065);
+      mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;courseGroup.add(mesh);
+    };
+    course.boundaries.forEach(([a,b])=>paint(a,b));
+    paint(...course.startMark,markMaterial);
+    const dashed=(a:Point,b:Point,step:number,dash:number,mat:THREE.Material)=>{
+      const length=Math.hypot(b.x-a.x,b.z-a.z);
+      const at=(d:number)=>({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length});
+      for(let d=0;d<length;d+=step)paint(at(d),at(Math.min(d+dash,length)),mat);
+    };
+    dashed(...course.finish,.45,.24,markMaterial);
+    // Carry dash phase across sampled segments instead of restarting every chord.
+    let distance=0;
+    for(let i=1;i<course.center.length;i++){
+      const a=course.center[i-1],b=course.center[i],length=Math.hypot(b.x-a.x,b.z-a.z);
+      for(let d=0;d<length;){
+        const phase=(distance+d)%1.2, span=Math.min(length-d,(phase<.45?.45:1.2)-phase);
+        if(span<1e-8){d+=1e-7;continue;}
+        if(phase<.45)paint({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length},{x:a.x+(b.x-a.x)*(d+span)/length,z:a.z+(b.z-a.z)*(d+span)/length},guideMaterial);
+        d+=span;
+      }
+      distance+=length;
+    }
+    // Reparent each freshly painted label so its canvas texture is course-owned.
+    const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);courseGroup.add(world.children[world.children.length-1]);};
+    label(`${course.label} / ${course.number}`,(course.bounds.minX+course.bounds.maxX)/2,course.bounds.minZ-2.5,8,1);
+    label('START',course.start.x,course.start.z+2.5,2.6,.6);
+    const [f1,f2]=course.finish;label('FINISH',(f1.x+f2.x)/2+3,(f1.z+f2.z)/2,2.6,.6);
+    world.updateMatrixWorld(true);
+  }
   groundText('LARRIA', -9, -6, 10, 2.3);
-  groundText('RIGHT ANGLE / 01', 6, -7, 8, 1);
-  groundText('START',0,11.5,2.6,.6);
-  groundText('FINISH',14,-1.8,2.6,.6);
+  setCourse(RIGHT_ANGLE);
 
   function tree(x: number, z: number, scale = 1) {
     instance(cylinder, bark, x, 1.9 * scale, z, 0.19 * scale, 3.8 * scale, 0.19 * scale);
@@ -225,5 +263,5 @@ export function createWorld(scene: THREE.Scene): { walls: WorldWall[] } {
     world.add(mesh);
   }
   world.updateMatrixWorld(true);
-  return { walls };
+  return { walls, setCourse };
 }

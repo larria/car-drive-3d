@@ -11,6 +11,7 @@ import {DrivingPhysics, type Gear} from './physics';
 import {ExamSession} from './exam-session';
 import {ExamUi} from './exam-ui';
 import {RIGHT_ANGLE} from './courses/right-angle';
+import {getCourse} from './courses';
 import {VEHICLE} from './vehicle-config';
 
 const app=document.querySelector<HTMLDivElement>('#app')!;
@@ -22,7 +23,7 @@ app.innerHTML=`
 <nav class="views" aria-label="视角"><button data-view="orbit" class="active"><span>◈</span> 自由环绕 <kbd>1</kbd></button><button data-view="cockpit"><span>◉</span> 驾驶座舱 <kbd>2</kbd></button><button data-view="follow"><span>➤</span> 跟随视角 <kbd>3</kbd></button></nav>
 <aside class="model-card"><div class="eyebrow">SELECTED VEHICLE</div><h2>458 <span>ITALIA</span></h2><p>Ferrari · 双门运动轿跑</p><div class="model-line"></div><div class="swatch-label"><span>车身涂装</span><span id="paint-name">鼠尾草绿</span></div><div class="swatches"><button class="selected" data-color="#668d83" data-name="鼠尾草绿" style="--swatch:#668d83" aria-label="鼠尾草绿"></button><button data-color="#a31e22" data-name="经典红" style="--swatch:#a31e22" aria-label="经典红"></button><button data-color="#e7e3d8" data-name="珍珠白" style="--swatch:#e7e3d8" aria-label="珍珠白"></button><button data-color="#283538" data-name="石墨黑" style="--swatch:#283538" aria-label="石墨黑"></button><button data-color="#d6ad50" data-name="香槟金" style="--swatch:#d6ad50" aria-label="香槟金"></button></div><button id="lights-toggle" class="text-button">◌ &nbsp; 车灯 <span>关闭</span></button><button id="quality" class="text-button">◇ &nbsp; 渲染质量 <span>高</span></button></aside>
 <section class="mirror-strip" aria-label="实时后视镜"><div class="mirror-heading"><span><i></i> 实时后视镜</span><button id="mirror-toggle">收起 −</button></div><div class="mirror-items">${[['left','左后视镜'],['center','内后视镜'],['right','右后视镜']].map(([id,label])=>`<button class="mirror-card" data-mirror="${id}" aria-label="放大${label}"><div class="mirror-image" id="mirror-${id}"></div><span>${label}<b>↗</b></span></button>`).join('')}</div><div class="mirror-note">实时后向镜像 · 驾驶辅助视角</div></section>
-<div class="scene-caption"><span class="scene-dot"></span> 01 &nbsp; 直角转弯考场 <span class="caption-rule"></span><span id="scene-help">拖动环绕 · 滚轮缩放</span></div>
+<div class="scene-caption"><span class="scene-dot"></span> <span id="course-caption">01 &nbsp; 直角转弯考场</span> <span class="caption-rule"></span><span id="scene-help">拖动环绕 · 滚轮缩放</span></div>
 <div class="right-tools"><button id="focus-toggle" type="button" aria-pressed="false">专注驾驶</button><button id="reset" title="复位车辆 (R)">↺<span>复位</span></button><button id="help" title="操作指南">?<span>帮助</span></button></div>
 <section class="drive-console"><div class="velocity"><div class="eyebrow">VELOCITY</div><div><strong id="speed">00</strong><span>km/h</span></div><small id="drive-state">车辆静止 · 踩下油门出发</small></div><div class="console-separator"></div><div class="gear-block"><span class="control-label">行驶档位</span><div class="gears"><button data-gear="R">R</button><button data-gear="N">N</button><button data-gear="D" class="active">D</button></div><small>停车后切换方向</small></div><div class="steering-block"><div id="steering-pad" role="slider" tabindex="0" aria-label="方向盘" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0"><svg id="steering-svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="8"/><path d="M14 42L39 51L43 88M86 42L61 51L57 88" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="50" cy="51" r="15" fill="currentColor"/><path d="M47 45L47 54L54 54" fill="none" stroke="#eaece7" stroke-width="2"/></svg></div><div><span class="control-label">方向盘</span><p><kbd>A</kbd> <kbd>D</kbd><span id="steer-value">0°</span></p><small>拖动转向 · 松手回正</small></div></div><div class="pedals"><button id="brake" class="pedal"><span class="pedal-grooves">▥</span><span>刹车 <kbd>S</kbd></span></button><button id="throttle" class="pedal accelerator"><span class="pedal-grooves">▥</span><span>油门 <kbd>W</kbd></span></button></div></section>
 <footer><span>THREE.JS × CANNON-ES <span class="foot-divider">/</span> 实时驾驶交互</span><span>低速体验模式 · 非专业驾驶仿真 <button id="credits">模型来源 ↗</button></span></footer>
@@ -66,16 +67,17 @@ async function init(){
   const session=new ExamSession();
   const look=new CockpitLook(renderer.domElement,()=>view==='cockpit'&&session.state==='running');
   const examUi=new ExamUi(session,action=>{
-    if(action==='select'){session.select();examUi.render();}
+    if(action==='select'||action.startsWith('select:')){release();session.select(getCourse(action.split(':')[1]??'right-angle'));ground.setCourse(session.course);resetPose();setView('orbit');$('#course-caption').textContent=`${session.course.number}　${session.course.name}考场`;examUi.render();}
     if(action==='start'||action==='retry')reset();
     if(action==='pause')pause();
     if(action==='resume'){release();physics.clearAccumulator();session.resume();examUi.render();}
-    if(action==='exit'){release();physics.reset(RIGHT_ANGLE.start.x,RIGHT_ANGLE.start.z);session.exit();drivingUi.setFocused(false);setView('orbit');examUi.render();}
+    if(action==='exit'){release();resetPose();session.exit();drivingUi.setFocused(false);setView('orbit');examUi.render();}
   });
   function pause(reason?:string){if(session.state!=='running')return;release();physics.clearAccumulator();session.pause(reason);examUi.render();}
   function requestGear(gear:Gear){if(session.state!=='running')return false;if(!physics.setGear(gear)){toast('请先刹停车辆，再切换行驶方向');return false;}document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===gear));return true;}
   function setView(next:string){view=next;orbit.enabled=view==='orbit';look.reset();document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'移动鼠标转头 · 双击回正':'车辆跟随 · 自由驾驶';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
-    if(view==='orbit'){camera.position.copy(car.root.localToWorld(new THREE.Vector3(-6,3.25,-6.6)));orbit.target.copy(car.root.position).add(new THREE.Vector3(0,.65,0));camera.fov=38;camera.updateProjectionMatrix();}
+    if(view==='orbit'&&!session.active){const b=session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=80;orbit.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
+    else if(view==='orbit'){orbit.maxDistance=16;camera.position.copy(car.root.localToWorld(new THREE.Vector3(-6,3.25,-6.6)));orbit.target.copy(car.root.position).add(new THREE.Vector3(0,.65,0));camera.fov=38;camera.updateProjectionMatrix();}
     else{camera.fov=view==='cockpit'?70:48;camera.updateProjectionMatrix();}
   }
   document.querySelectorAll<HTMLElement>('button[data-view]').forEach(e=>e.onclick=()=>setView(e.dataset.view!));
@@ -96,7 +98,8 @@ async function init(){
   $('#steering-pad').onpointerdown=e=>{if(session.state!=='running')return;drivingUi.beginOperation();look.resetPointer();dragging=true;startX=e.clientX;$('#steering-pad').setPointerCapture(e.pointerId);};
   $('#steering-pad').onpointermove=e=>{if(dragging)dragSteer=THREE.MathUtils.clamp((startX-e.clientX)/95,-1,1);};
   $('#steering-pad').onpointerup=$('#steering-pad').onpointercancel=()=>{dragging=false;dragSteer=0;};
-  function reset(){release();drivingUi.setFocused(true);physics.reset(RIGHT_ANGLE.start.x,RIGHT_ANGLE.start.z);car.root.position.set(RIGHT_ANGLE.start.x,0,RIGHT_ANGLE.start.z);car.root.quaternion.identity();prevPos.copy(car.root.position);session.start();setView('cockpit');examUi.render();document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===physics.gear));}
+  function resetPose(){const c=session.course;physics.reset(c.start.x,c.start.z,c.startYaw);car.root.position.set(c.start.x,0,c.start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),c.startYaw);prevPos.copy(car.root.position);}
+  function reset(){release();drivingUi.setFocused(true);resetPose();session.start();setView('cockpit');examUi.render();document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===physics.gear));}
   $('#reset').onclick=reset;
   $('#lights-toggle').onclick=()=>{headlights=!headlights;lamps.forEach(l=>l.intensity=headlights?18:0);$('#lights-toggle span').textContent=headlights?'开启':'关闭';toast(headlights?'车灯已开启':'车灯已关闭');};
   $('#quality').onclick=()=>{quality=!quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality?1.7:1));$('#quality span').textContent=quality?'高':'流畅';};

@@ -1,13 +1,13 @@
 {
   "name": "larria-car-drive-3d",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "vitest run tests/physics.test.ts tests/mirrors.test.ts tests/exam.test.ts tests/drive-search.test.ts",
+    "test": "vitest run tests/physics.test.ts tests/mirrors.test.ts tests/exam.test.ts tests/drive-search.test.ts tests/s-curve.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -97,6 +97,13 @@ test('manifest, installation UI, precached model and offline reload', async ({ p
   await expect(page.locator('body')).toHaveAttribute('data-exam', 'running');
   await expect(page.locator('body')).toHaveAttribute('data-view', 'cockpit');
   await page.screenshot({path:'artifacts/exam-offline.png'});
+  await page.locator('[data-exam="exit"]:visible').click();
+  await page.locator('[data-exam="select:s-curve"]').click();
+  await expect(page.locator('.briefing-page h1')).toHaveText('曲线行驶');
+  await page.locator('[data-exam="start"]').click();
+  await expect(page.locator('body')).toHaveAttribute('data-view','cockpit');
+  expect(await page.evaluate(()=>window.larria.session.rules.course.boundaries.length)).toBe(196);
+  await page.screenshot({path:'artifacts/s-offline.png'});
 });
 
 
