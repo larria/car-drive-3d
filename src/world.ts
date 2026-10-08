@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RIGHT_ANGLE } from './courses/right-angle';
-import type { CourseDefinition, Point } from './courses/course-definition';
+import { isParkingCourse, type CourseDefinition, type Point } from './courses/course-definition';
 
 export type WorldWall = { x: number; y: number; z: number; sx: number; sy: number; sz: number };
 
@@ -139,8 +139,11 @@ export function createWorld(scene: THREE.Scene) {
     world.remove(courseGroup);
     geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());
     courseGroup=new THREE.Group();courseGroup.name=`course:${course.id}`;world.add(courseGroup);
-    const road=new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(course.polygon.map(p=>new THREE.Vector2(p.x,-p.z)))),material('#525b59'));
-    road.rotation.x=-Math.PI/2;road.position.y=.021;road.receiveShadow=true;courseGroup.add(road);
+    const parking=isParkingCourse(course);
+    (parking?course.roads:[course.polygon]).forEach((points,index)=>{
+      const road=new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(points.map(p=>new THREE.Vector2(p.x,-p.z)))),material(parking&&index?'#45605c':'#525b59'));
+      road.rotation.x=-Math.PI/2;road.position.y=.021+index*.001;road.receiveShadow=true;courseGroup.add(road);
+    });
     const paintGeometry=new THREE.BoxGeometry(1,1,1);
     const edgeMaterial=material('#e4e3d8'), guideMaterial=material('#dab851'), markMaterial=material('#92ba9f');
     const paint=(a:Point,b:Point,mat:THREE.Material=edgeMaterial)=>{
@@ -150,31 +153,43 @@ export function createWorld(scene: THREE.Scene) {
       mesh.scale.set(Math.hypot(dx,dz),.008,.065);
       mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;courseGroup.add(mesh);
     };
-    course.boundaries.forEach(([a,b])=>paint(a,b));
+    if(parking)course.penaltyLines.forEach(({segment:[a,b],reason})=>paint(a,b,reason.startsWith('碰擦')?guideMaterial:edgeMaterial));
+    else course.boundaries.forEach(([a,b])=>paint(a,b));
     paint(...course.startMark,markMaterial);
     const dashed=(a:Point,b:Point,step:number,dash:number,mat:THREE.Material)=>{
       const length=Math.hypot(b.x-a.x,b.z-a.z);
       const at=(d:number)=>({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length});
       for(let d=0;d<length;d+=step)paint(at(d),at(Math.min(d+dash,length)),mat);
     };
-    dashed(...course.finish,.45,.24,markMaterial);
-    // Carry dash phase across sampled segments instead of restarting every chord.
-    let distance=0;
-    for(let i=1;i<course.center.length;i++){
-      const a=course.center[i-1],b=course.center[i],length=Math.hypot(b.x-a.x,b.z-a.z);
-      for(let d=0;d<length;){
-        const phase=(distance+d)%1.2, span=Math.min(length-d,(phase<.45?.45:1.2)-phase);
-        if(span<1e-8){d+=1e-7;continue;}
-        if(phase<.45)paint({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length},{x:a.x+(b.x-a.x)*(d+span)/length,z:a.z+(b.z-a.z)*(d+span)/length},guideMaterial);
-        d+=span;
+    if(parking){
+      paint(...course.finish,markMaterial);
+      course.guides.forEach(([a,b])=>dashed(a,b,.55,.26,guideMaterial));
+      const z=course.parkZone;
+      const fill=new THREE.Mesh(new THREE.PlaneGeometry(z.maxX-z.minX,z.maxZ-z.minZ),
+        new THREE.MeshBasicMaterial({color:'#92ba9f',transparent:true,opacity:.12,depthWrite:false}));
+      fill.rotation.x=-Math.PI/2;fill.position.set((z.minX+z.maxX)/2,.027,(z.minZ+z.maxZ)/2);courseGroup.add(fill);
+    }else{
+      dashed(...course.finish,.45,.24,markMaterial);
+      // Carry dash phase across sampled segments instead of restarting every chord.
+      let distance=0;
+      for(let i=1;i<course.center.length;i++){
+        const a=course.center[i-1],b=course.center[i],length=Math.hypot(b.x-a.x,b.z-a.z);
+        for(let d=0;d<length;){
+          const phase=(distance+d)%1.2, span=Math.min(length-d,(phase<.45?.45:1.2)-phase);
+          if(span<1e-8){d+=1e-7;continue;}
+          if(phase<.45)paint({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length},{x:a.x+(b.x-a.x)*(d+span)/length,z:a.z+(b.z-a.z)*(d+span)/length},guideMaterial);
+          d+=span;
+        }
+        distance+=length;
       }
-      distance+=length;
     }
     // Reparent each freshly painted label so its canvas texture is course-owned.
     const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);courseGroup.add(world.children[world.children.length-1]);};
     label(`${course.label} / ${course.number}`,(course.bounds.minX+course.bounds.maxX)/2,course.bounds.minZ-2.5,8,1);
-    label('START',course.start.x,course.start.z+2.5,2.6,.6);
-    const [f1,f2]=course.finish;label('FINISH',(f1.x+f2.x)/2+3,(f1.z+f2.z)/2,2.6,.6);
+    label('START',course.start.x,course.start.z+(parking?Math.sign(course.start.z)*2.5:2.5),2.6,.6);
+    const [f1,f2]=course.finish;
+    label('FINISH',(f1.x+f2.x)/2+(parking&&course.id==='parallel-parking'?0:3),(f1.z+f2.z)/2+(parking&&course.id==='parallel-parking'?-1:0),2.6,.6);
+    if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);}
     world.updateMatrixWorld(true);
   }
   groundText('LARRIA', -9, -6, 10, 2.3);

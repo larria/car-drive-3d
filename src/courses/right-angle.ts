@@ -1,5 +1,5 @@
 import { VEHICLE } from '../vehicle-config';
-import { boundsOf, type CourseDefinition, type Point, type Segment } from './course-definition';
+import { boundsOf, type DrivingCourse, type Point, type Segment } from './course-definition';
 export type { Point, Segment } from './course-definition';
 export function rightAngle(wheelbase = VEHICLE.wheelbase as number) {
   const width = wheelbase + 1, h = width / 2, end = 10 + h;
@@ -10,7 +10,7 @@ export function rightAngle(wheelbase = VEHICLE.wheelbase as number) {
     finish: [p(end,-width),p(end,0)] as Segment };
 }
 const geometry = rightAngle();
-export const RIGHT_ANGLE: CourseDefinition & ReturnType<typeof rightAngle> = {
+export const RIGHT_ANGLE: DrivingCourse & ReturnType<typeof rightAngle> = {
   ...geometry, id:'right-angle', name:'直角转弯', number:'01', label:'RIGHT ANGLE',
   description:'把握转向时机，一次顺畅通过。',
   dimensions:`道路宽 ${geometry.width.toFixed(3)} m · 入口 12 m · 出口 10 m`,

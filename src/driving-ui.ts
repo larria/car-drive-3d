@@ -19,7 +19,12 @@ export class CockpitLook {
   pitch = 0;
   private last: { x: number; y: number } | null = null;
   private touchId: number | null = null;
-  constructor(private canvas: HTMLCanvasElement, private enabled: () => boolean) {
+  private pendingLock = false;
+  private ignoreNextEscape = false;
+  private wasLocked = false;
+  private unlockingProgrammatically = false;
+  constructor(private canvas: HTMLCanvasElement, private enabled: () => boolean,
+    private lockButton: HTMLButtonElement, private feedback: (message: string) => void) {
     canvas.addEventListener('pointerdown', e => {
       if (e.pointerType !== 'mouse' && this.canLook(e) && this.touchId === null) {
         this.touchId = e.pointerId;
@@ -28,24 +33,80 @@ export class CockpitLook {
       }
     });
     canvas.addEventListener('pointermove', e => {
-      if (!this.canLook(e) || (e.pointerType !== 'mouse' && e.pointerId !== this.touchId)) { this.last = null; return; }
-      if (this.last) {
-        this.yaw = Math.max(-1.25, Math.min(1.25, this.yaw - (e.clientX - this.last.x) * .004));
-        this.pitch = Math.max(-.65, Math.min(.5, this.pitch - (e.clientY - this.last.y) * .003));
+      if (this.locked) {
+        if (e.pointerType === 'mouse' && this.enabled()) this.rotate(e.movementX, e.movementY);
+        return;
       }
+      if (!this.canLook(e)) {
+        if (e.pointerType === 'mouse') this.last = null;
+        return;
+      }
+      if (e.pointerType !== 'mouse' && e.pointerId !== this.touchId) return;
+      if (this.last) this.rotate(e.clientX - this.last.x, e.clientY - this.last.y);
       this.last = { x: e.clientX, y: e.clientY };
     });
-    canvas.addEventListener('pointerleave', () => { if (this.touchId === null) this.last = null; });
+    canvas.addEventListener('pointerleave', () => { if (this.touchId === null && !this.locked) this.last = null; });
     for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      canvas.addEventListener(event, e => { if ((e as PointerEvent).pointerId === this.touchId) this.resetPointer(); });
+      canvas.addEventListener(event, e => {
+        if ((e as PointerEvent).pointerId === this.touchId) this.resetPointer();
+      });
     }
     canvas.addEventListener('dblclick', () => { if (this.enabled()) this.reset(); });
     document.addEventListener('pointermove', e => {
-      if (e.target !== canvas || !this.canLook(e)) this.last = null;
+      if (!this.locked && e.pointerType === 'mouse' && (e.target !== canvas || !this.canLook(e))) this.last = null;
     });
-    window.addEventListener('blur', () => this.resetPointer());
-    document.addEventListener('visibilitychange', () => this.resetPointer());
-    new MutationObserver(() => this.resetPointer()).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    document.addEventListener('pointerlockchange', () => {
+      const locked = this.locked;
+      if (!locked && this.wasLocked && !this.unlockingProgrammatically) this.ignoreNextEscape = true;
+      this.unlockingProgrammatically = false;
+      this.wasLocked = locked;
+      this.pendingLock = false;
+      this.resetPointer();
+      this.lockButton.setAttribute('aria-pressed', String(locked));
+      this.lockButton.textContent = locked ? '退出环视' : '锁定环视';
+      document.body.dataset.lookLocked = String(locked);
+      if (locked) this.feedback('已锁定环视 · Esc 解锁，第二次 Esc 暂停');
+    });
+    document.addEventListener('pointerlockerror', () => {
+      this.pendingLock = false;
+      this.feedback('浏览器未允许锁定环视，仍可移动鼠标转头');
+    });
+    window.addEventListener('blur', () => this.unlock());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.unlock(); });
+  }
+  get locked() { return document.pointerLockElement === this.canvas; }
+  private rotate(dx: number, dy: number) {
+    this.yaw = Math.max(-Math.PI, Math.min(Math.PI, this.yaw - dx * .004));
+    this.pitch = Math.max(-.65, Math.min(.5, this.pitch - dy * .003));
+  }
+  async lock() {
+    if (!this.enabled() || this.pendingLock) return;
+    if (this.locked) { this.unlock(); return; }
+    if (!this.canvas.requestPointerLock) { this.feedback('当前浏览器不支持锁定环视，仍可移动鼠标转头'); return; }
+    this.pendingLock = true;
+    this.ignoreNextEscape = false;
+    try {
+      await this.canvas.requestPointerLock();
+      if (!this.locked) this.pendingLock = false;
+    } catch {
+      this.pendingLock = false;
+      this.feedback('浏览器未允许锁定环视，仍可移动鼠标转头');
+    }
+  }
+  unlock() {
+    this.pendingLock = false;
+    this.ignoreNextEscape = false;
+    this.resetPointer();
+    if (this.locked) { this.unlockingProgrammatically = true; document.exitPointerLock(); }
+  }
+  /** Browser may unlock before dispatching Escape's keydown. */
+  consumeEscape() {
+    if (this.locked || this.pendingLock) {
+      this.unlock();
+      return true;
+    }
+    if (this.ignoreNextEscape) { this.ignoreNextEscape = false; return true; }
+    return false;
   }
   private canLook(e: PointerEvent) {
     if (!this.enabled() || document.querySelector('dialog[open]')) return false;
@@ -56,6 +117,9 @@ export class CockpitLook {
       return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     });
   }
-  resetPointer() { this.last = null; this.touchId = null; }
+  resetPointer() {
+    if (this.touchId !== null && this.canvas.hasPointerCapture(this.touchId)) this.canvas.releasePointerCapture(this.touchId);
+    this.last = null; this.touchId = null;
+  }
   reset() { this.yaw = this.pitch = 0; this.resetPointer(); }
 }

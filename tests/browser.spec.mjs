@@ -33,7 +33,7 @@ test('complete actual driving pass using only held keyboard and screen steering'
  await page.mouse.move(cx,cy);await page.mouse.down();await page.keyboard.down('w');let turning=false,straight=false;
  for(let i=0;i<1200;i++){
   const p=await page.evaluate(()=>{const p=window.larria.physics;return{x:p.chassis.position.x,z:p.chassis.position.z,yaw:2*Math.atan2(p.chassis.quaternion.y,p.chassis.quaternion.w),state:window.larria.session.state};});
-  if(p.state!=='running'){console.log('drive-terminal',p);break;}if(p.z<1.48)turning=true;if(p.yaw< -1.53)straight=true;
+  if(p.state!=='running')break;if(p.z<1.48)turning=true;if(p.yaw< -1.53)straight=true;
   const steer=turning?(straight?Math.max(-1,Math.min(1,(-Math.PI/2-p.yaw)*3)):-1):Math.max(-.4,Math.min(.4,(p.x+.65)*.6-p.yaw*2));
   await page.mouse.move(cx-steer*95,cy);await page.waitForTimeout(18);
  }
@@ -61,19 +61,106 @@ test('hover look, UI exclusion, mirrors and narrow screen controls',async({page}
 });
 
 
-test('upcoming parking projects show a dismissible placeholder',async({page})=>{
- await open(page);
- for(const title of ['侧方位停车','倒车入库']){
-  const card=page.locator(`[data-upcoming="${title}"]`);await card.click();
-  await expect(page.locator('#upcoming-dialog')).toBeVisible();
-  await expect(page.locator('#upcoming-title')).toHaveText(title);
-  await expect(page.locator('#upcoming-dialog')).toContainText('敬请期待');
-  expect(await state(page)).toBe('projects');
-  await page.getByRole('button',{name:'返回项目',exact:true}).click();
-  await expect(page.locator('#upcoming-dialog')).not.toBeVisible();
-  await expect(card).toBeFocused();
+test('keyboard scope, repeated keys, focus and directional gear feedback',async({page})=>{
+ await open(page);await start(page);
+ await page.evaluate(()=>{window.__keys=[];document.addEventListener('keydown',e=>window.__keys.push([e.code,e.defaultPrevented]),true);});
+ await page.keyboard.down('w');await page.keyboard.down('a');await page.waitForTimeout(150);
+ expect(await page.evaluate(()=>window.larria.physics.throttle)).toBe(1);
+ expect(await page.evaluate(()=>window.larria.physics.steering)).toBeGreaterThan(0);
+ await page.evaluate(()=>document.dispatchEvent(new KeyboardEvent('keydown',{code:'Space',key:' ',repeat:true,bubbles:true,cancelable:true})));
+ expect(await page.evaluate(()=>window.__keys.at(-1))).toEqual(['Space',false]); // capture phase is before preventDefault
+ expect(await page.evaluate(()=>{let prevented=false;const e=new KeyboardEvent('keydown',{code:'ArrowDown',key:'ArrowDown',repeat:true,bubbles:true,cancelable:true});document.dispatchEvent(e);prevented=e.defaultPrevented;return prevented;})).toBe(true);
+ await page.keyboard.up('a');await page.keyboard.up('w');
+ await page.keyboard.press('Control+KeyZ');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('D');
+ await page.locator('#help').focus();await page.keyboard.press('z');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('D');
+ await page.evaluate(()=>document.activeElement.blur());await page.keyboard.press('z');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('R');
+ await page.evaluate(()=>window.larria.physics.chassis.velocity.z=2);await page.keyboard.press('c');await expect(page.locator('#toast')).toContainText('倒退');
+});
+
+test('explicit pointer lock, natural Escape and rejected-lock fallback',async({page})=>{
+ await open(page);await start(page);
+ await page.locator('#look-lock').click();await expect.poll(()=>page.evaluate(()=>!!document.pointerLockElement)).toBe(true);
+ await page.mouse.move(700,400);await page.mouse.move(900,460);expect(Math.abs(await page.evaluate(()=>window.larria.look.yaw))).toBeGreaterThan(.1);
+ await page.keyboard.press('Escape');await expect.poll(()=>page.evaluate(()=>!!document.pointerLockElement)).toBe(false);expect(await state(page)).toBe('running');
+ await page.keyboard.press('Escape');await expect(page.locator('[data-exam="resume"]')).toBeVisible();await page.locator('[data-exam="resume"]').click();
+ await page.locator('#look-lock').click();await expect.poll(()=>page.evaluate(()=>!!document.pointerLockElement)).toBe(true);
+ await page.keyboard.press('3');await expect.poll(()=>page.evaluate(()=>!!document.pointerLockElement)).toBe(false);
+ await page.locator('button[data-view="cockpit"]').click();
+ await page.evaluate(()=>{document.querySelector('#viewport canvas').requestPointerLock=()=>Promise.reject(new Error('denied'));});
+ await page.locator('#look-lock').click();await expect(page.locator('#toast')).toContainText('未允许锁定');expect(await state(page)).toBe('running');
+ await page.mouse.move(600,400);await page.mouse.move(680,430);expect(Math.abs(await page.evaluate(()=>window.larria.look.yaw))).toBeGreaterThan(.1);
+ await page.locator('#look-center').click();expect(await page.evaluate(()=>window.larria.look.yaw)).toBe(0);
+});
+
+test('touch ownership across pedals, wheel and cockpit and cancellation',async({page})=>{
+ await open(page);await start(page);
+ const result=await page.evaluate(()=>{
+  const ids={throttle:11,brake:12,steer:13,look:14,extra:15};const el=s=>document.querySelector(s),canvas=el('#viewport canvas');
+  const send=(target,type,id,x=700,y=400)=>target.dispatchEvent(new PointerEvent(type,{pointerId:id,pointerType:'touch',isPrimary:id===11,bubbles:true,cancelable:true,clientX:x,clientY:y}));
+  const throttle=el('#throttle'),brake=el('#brake'),steer=el('#steering-pad');
+  send(throttle,'pointerdown',ids.extra);send(throttle,'pointerdown',ids.throttle);
+  send(brake,'pointerdown',ids.brake);send(steer,'pointerdown',ids.steer,500);send(canvas,'pointerdown',ids.look);
+  send(steer,'pointermove',ids.steer,420);send(canvas,'pointermove',ids.look,770,420);
+  const lookYaw=window.larria.look.yaw;
+  send(throttle,'pointerup',ids.throttle);send(steer,'pointermove',ids.extra,540);
+  const afterOne={yaw:window.larria.look.yaw,throttleCount:throttle.hasPointerCapture(ids.extra)};
+  send(canvas,'pointercancel',ids.look);send(steer,'pointercancel',ids.steer);
+  return{lookYaw,afterOne,touchReleased:!canvas.hasPointerCapture(ids.look),wheelReleased:!steer.hasPointerCapture(ids.steer)};
+ });
+ expect(result.lookYaw).not.toBe(0);expect(result.afterOne.yaw).toBe(result.lookYaw);
+ expect(result.touchReleased).toBe(true);expect(result.wheelReleased).toBe(true);
+ await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await expect(page.locator('[data-exam="resume"]')).toBeVisible();
+ expect(await page.evaluate(()=>document.querySelector('#throttle').hasPointerCapture(15))).toBe(false);
+});
+
+test('Chrome CDP three-finger throttle, steering and cockpit look remain independent',async({page})=>{
+ await page.setViewportSize({width:390,height:844});await open(page);await start(page);
+ const cdp=await page.context().newCDPSession(page);
+ const point=async(selector,id)=>{const box=await page.locator(selector).boundingBox();return{x:Math.round(box.x+box.width/2),y:Math.round(box.y+box.height/2),id}};
+ const throttle=await point('#throttle',1),wheel=await point('#steering-pad',2),look={x:210,y:450,id:3};
+ const dispatch=async(type,touchPoints)=>{await cdp.send('Input.dispatchTouchEvent',{type,touchPoints});await page.waitForTimeout(100)};
+ const sample=()=>page.evaluate(()=>({throttle:window.larria.physics.throttle,steer:window.larria.physics.steering,yaw:window.larria.look.yaw}));
+ await dispatch('touchStart',[throttle]);await dispatch('touchStart',[throttle,wheel]);await dispatch('touchStart',[throttle,wheel,look]);
+ await dispatch('touchMove',[throttle,{...wheel,x:wheel.x-25},{...look,x:look.x+35}]);
+ const together=await sample();expect(together.throttle).toBe(1);expect(together.steer).toBeGreaterThan(.05);expect(Math.abs(together.yaw)).toBeGreaterThan(.05);
+ await page.screenshot({path:'artifacts/three-finger-cockpit.png'});
+ await dispatch('touchMove',[throttle,wheel,{...look,x:look.x+65}]);const moving=await sample();expect(Math.abs(moving.yaw)).toBeGreaterThan(Math.abs(together.yaw));
+ await dispatch('touchEnd',[{...wheel,x:wheel.x-25}]);const wheelUp=await sample();expect(wheelUp.throttle).toBe(1);
+ await dispatch('touchEnd',[{...look,x:look.x+65}]);const lookUp=await sample();expect(lookUp.throttle).toBe(1);
+ await dispatch('touchEnd',[]);expect((await sample()).throttle).toBe(0);
+});
+
+test('parking projects open their own rules and default cockpit, free remains disabled',async({page})=>{
+ await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(1);
+ for(const [id,title] of [['parallel-parking','侧方位停车'],['reverse-garage','倒车入库']]){
+  await page.locator(`[data-exam="select:${id}"]`).click();
+  await expect(page.locator('.briefing-page h1')).toHaveText(title);
+  await expect(page.locator('.exam-rules')).toContainText('30 秒');
+  await expect(page.locator('.exam-rules')).toContainText('2 秒');
+  await expect(page.locator('.briefing-page .course-diagram')).toContainText('↑');
+  await page.locator('[data-exam="start"]').click();
+  expect(await page.evaluate(()=>window.larria.session.course.id)).toBe(id);
+  await expect(page.locator('button[data-view="cockpit"]')).toHaveClass(/active/);
+  await expect(page.locator('[data-parking="count"]')).toContainText('0');
+  await page.locator('[data-exam="exit"]:visible').click();
  }
- await page.locator('[data-upcoming="侧方位停车"]').focus();await page.keyboard.press('Enter');
- await expect(page.locator('#upcoming-dialog')).toBeVisible();await page.keyboard.press('Escape');
- await expect(page.locator('#upcoming-dialog')).not.toBeVisible();
+});
+
+test('all courses preserve selected view on failure and success retry with matching mirrors',async({page})=>{
+ await open(page);
+ const cases=[['right-angle','select','orbit'],['s-curve','select:s-curve','follow'],['parallel-parking','select:parallel-parking','orbit'],['reverse-garage','select:reverse-garage','follow']];
+ for(const [id,select,view] of cases){
+  await page.locator(`[data-exam="${select}"]`).click();await page.locator('[data-exam="start"]').click();
+  await expect(page.locator('button[data-view="cockpit"]')).toHaveClass(/active/);
+  await page.locator(`button[data-view="${view}"]`).click();
+  await page.keyboard.down('w');await expect(page.locator('.result-card h1')).toBeVisible({timeout:35000});await page.keyboard.up('w');
+  await page.locator('[data-exam="retry"]:visible').click();
+  const data=await page.evaluate(()=>({view:window.larria.view,active:[...document.querySelectorAll('button[data-view].active')].map(b=>b.dataset.view),surfaces:window.larria.mirrors.entries.map(e=>e.surface.visible),strip:document.querySelector('.mirror-strip').hidden,gear:window.larria.physics.gear,course:window.larria.session.course.id}));
+  expect(data.view).toBe(view);expect(data.active).toEqual([view]);expect(data.strip).toBe(false);expect(data.surfaces).toEqual([false,false,false]);expect(data.gear).toBe('D');expect(data.course).toBe(id);
+  await page.locator('button[data-view="cockpit"]').click();await page.keyboard.press('r');
+  await expect(page.locator('button[data-view="cockpit"]')).toHaveClass(/active/);
+  await expect(page.locator('.mirror-strip')).toBeHidden();
+  expect(await page.evaluate(()=>window.larria.mirrors.entries.map(e=>e.surface.visible))).toEqual([true,true,true]);
+  await page.locator('[data-exam="exit"]:visible').click();
+ }
 });

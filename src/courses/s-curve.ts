@@ -1,4 +1,4 @@
-import { boundsOf, type CourseDefinition, type Point, type Segment } from './course-definition';
+import { boundsOf, type DrivingCourse, type Point, type Segment } from './course-definition';
 
 /** Metres; faithful to scene-1-s-curve and scene-loader's 48-step generator. */
 export function sCurve() {
@@ -25,7 +25,7 @@ export function sCurve() {
   extend(true,2);extend(false,3);
   const walls=(side:Point[]):Segment[]=>side.slice(1).map((p,i)=>[side[i],p]);
   const polygon=[...sideA,...sideB.slice().reverse()];
-  const course:CourseDefinition={id:'s-curve',name:'曲线行驶',number:'02',label:'S CURVE',
+  const course:DrivingCourse={id:'s-curve',name:'曲线行驶',number:'02',label:'S CURVE',
     description:'在连续弯道中感受方向，先右转，再左转。',dimensions:'中心半径 7.5 m · 道路宽 3.5 m · 连续双弧',
     width,start:{x:0,z:9.5},startYaw:0,startMark:[{x:-1.75,z:9.5},{x:1.75,z:9.5}],
     polygon,boundaries:[...walls(sideA),...walls(sideB)],center,

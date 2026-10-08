@@ -17,3 +17,13 @@ body[data-view="cockpit"] .model-card,body[data-view="cockpit"] .intro{visibilit
 
 .project-available{cursor:pointer;background:#e2e8de;border-color:#bdccbd}.project-available:hover{background:#d9e3d6;border-color:#6a856f}.project-available>span:last-child{color:#355343;border-color:#a8bda9}
 body[data-exam="projects"] #viewport,body[data-exam="briefing"] #viewport{visibility:hidden}.views button{transition:none}body[data-exam="projects"] main,body[data-exam="briefing"] main{visibility:visible}body[data-exam="projects"] main>*:not(footer),body[data-exam="briefing"] main>*:not(footer){visibility:hidden;pointer-events:none}
+.parking-status{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:#596d5e;font-variant-numeric:tabular-nums}.parking-status span{white-space:nowrap}.parking-status b{font-weight:650;color:#254b36}@media(max-width:780px){#exam-hud:has(.parking-status){align-items:flex-start}.parking-status{gap:3px 9px;max-width:210px;margin-top:5px;font-size:9px}.parking-status span{white-space:nowrap}#exam-hud:has(.parking-status) .exam-actions button{padding:6px;font-size:10px;min-height:35px}}
+
+/* Original LARRIA cursor and cockpit look controls; preserve the existing shell. */
+:root{cursor:url('./assets/cursors/pointer.svg') 3 2,auto}
+button,a,[role="slider"]{cursor:url('./assets/cursors/click.svg') 3 2,pointer}
+#steering-pad{cursor:url('./assets/cursors/steer.svg') 12 14,ew-resize}
+.right-tools #look-lock,.right-tools #look-center{font-size:10px;min-height:40px;white-space:nowrap}
+body[data-look-locked="true"] #viewport canvas{cursor:none}
+body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
+@media(max-width:780px){.right-tools #look-center{font-size:9px;padding:6px 8px;min-width:44px}.right-tools #look-lock{display:none}}
