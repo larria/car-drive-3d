@@ -108,11 +108,10 @@ async function init(){
     ($('#setting-quality') as HTMLSelectElement).value=settings.quality;
     ($('#setting-mirrors') as HTMLInputElement).checked=mirrorsExpanded;
     $('#help-controls').textContent=settings.realisticControls?'拟真：W / ↑ 油门 · S / ↓ / 空格 纯刹车':'游戏化：W / ↑ 前进 · S / ↓ 刹停后倒车 · 空格纯刹车';
-    document.querySelectorAll<HTMLElement>('[data-control-description]').forEach(el=>el.textContent=settings.realisticControls?'W 油门 · S / 空格刹车 · Z / X / C 换档':'W 前进 · S 刹停后倒车 · 空格纯刹车 · Z / X / C 可手动换档');
     $('#brake kbd').textContent=settings.realisticControls?'S / 空格':'空格';
     examUi.setControlsRealistic(settings.realisticControls);
   }
-  function changeSettings(patch:Partial<Settings>){const changedMode=patch.realisticControls!==undefined&&patch.realisticControls!==settings.realisticControls;if(changedMode){release();}applySettings(settingsStore.update(patch));}
+  function changeSettings(patch:Partial<Settings>){if(patch.realisticControls!==undefined&&patch.realisticControls!==settings.realisticControls)release();applySettings(settingsStore.update(patch));}
   ($('#setting-realistic') as HTMLInputElement).onchange=e=>changeSettings({realisticControls:(e.target as HTMLInputElement).checked});
   ($('#setting-paint') as HTMLSelectElement).onchange=e=>changeSettings({paint:(e.target as HTMLSelectElement).value});
   ($('#setting-lights') as HTMLInputElement).onchange=e=>changeSettings({headlights:(e.target as HTMLInputElement).checked});
@@ -146,7 +145,7 @@ async function init(){
     if(e.code==='Escape'){if(look.consumeEscape())return;if(expanded){closeExpanded();return;}pause();return;}
     if(['KeyZ','KeyX','KeyC'].includes(e.code)){requestGear(({KeyZ:'R',KeyX:'N',KeyC:'D'} as Record<string,Gear>)[e.code]);return;}
     if(e.code==='Digit1')setView('orbit');if(e.code==='Digit2')setView('cockpit');if(e.code==='Digit3')setView('follow');if(e.code==='KeyR')reset();
-  });document.addEventListener('keyup',e=>{keys.delete(e.code);if(['KeyW','ArrowUp','KeyS','ArrowDown'].includes(e.code))controls.reset();});
+  });document.addEventListener('keyup',e=>keys.delete(e.code));
   for(const name of ['throttle','brake'] as const){const el=$(`#${name}`);el.onpointerdown=e=>{if(session.state!=='running')return;el.setPointerCapture(e.pointerId);held[name].add(e.pointerId);drivingUi.beginOperation();};const end=(e:PointerEvent)=>{held[name].delete(e.pointerId);};el.onpointerup=el.onpointercancel=el.onlostpointercapture=end;}
   let startX=0;
   const pad=$('#steering-pad');

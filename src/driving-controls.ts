@@ -9,7 +9,6 @@ export type ControlOutput = { input: DrivingInput; switching: boolean; rejected:
 export class DrivingControls {
   private neutralLock = false;
   private mustReleaseNeutral = false;
-  reset() { if (this.neutralLock) this.mustReleaseNeutral = false; }
   release() { this.neutralLock = false; this.mustReleaseNeutral = false; }
   /** Manual selection wins; neutral remains neutral until a new directional press. */
   manual(gear: Gear) { this.neutralLock = gear === 'N'; this.mustReleaseNeutral = this.neutralLock; }
@@ -17,13 +16,11 @@ export class DrivingControls {
     const input: DrivingInput = { throttle: 0, brake: 0, steer: intent.steer };
     const both = intent.forward && intent.reverse;
     if (realistic) {
-      this.reset();
       input.throttle = intent.forward || intent.touchThrottle ? 1 : 0;
       input.brake = intent.brake || intent.reverse ? 1 : 0;
       return { input, switching: false, rejected: false };
     }
     if (intent.brake || both) {
-      this.reset();
       input.brake = 1;
       return { input, switching: false, rejected: false };
     }
@@ -35,7 +32,7 @@ export class DrivingControls {
     }
     if (state.gear === desired) {
       this.neutralLock = false;
-      this.reset();
+      this.mustReleaseNeutral = false;
       input.throttle = 1;
       return { input, switching: false, rejected: false };
     }
@@ -52,8 +49,8 @@ export class DrivingControls {
       input.brake = 1;
       return { input, switching: true, rejected: true };
     }
-    this.reset();
     this.neutralLock = false;
+    this.mustReleaseNeutral = false;
     input.throttle = 1;
     return { input, switching: false, rejected: false };
   }

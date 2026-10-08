@@ -34,8 +34,8 @@ describe('input interpreter, independent of physics/rules',()=>{
  it('manual neutral holds until release and motion cannot bypass rejected protected change',()=>{
   const h=harness();h.controls.manual('N');h.gear='N';
   expect(h.drive({reverse:true}).input).toMatchObject({brake:1,throttle:0});expect(h.gear).toBe('N');
-  h.controls.reset();expect(h.drive({reverse:true}).input.brake).toBe(1);
-  h.controls.release();h.allow=false;
+  expect(h.drive({reverse:true}).input.brake).toBe(1);
+  h.drive({});h.allow=false;
   expect(h.drive({reverse:true}).rejected).toBe(true);expect(h.gear).toBe('N');
   h.allow=true;expect(h.drive({reverse:true}).input.throttle).toBe(1);expect(h.gear).toBe('R');
  });
