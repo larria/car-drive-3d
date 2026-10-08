@@ -20,7 +20,7 @@ export function isSafeToRefresh(): boolean {
 
 let initialized = false;
 /** Call once after rendering the existing footer. Production builds require HTTPS (or localhost). */
-export function initPwa(): void {
+export function initPwa(notify: (text: string) => void = () => {}): void {
   if (initialized) return;
   const footer = document.querySelector('footer');
   if (!footer) throw new Error('initPwa() 必须在 footer 渲染完成后调用。');
@@ -53,12 +53,13 @@ export function initPwa(): void {
   close.onclick = () => dialog.close();
   dialog.append(heading, message, confirm, close);
   document.body.append(dialog);
-  function tell(text: string, update = false, modal = true) {
-    heading.textContent = update ? '发现应用更新' : '应用状态';
-    message.textContent = text;
-    confirm.hidden = !update;
+  function tell(text: string, update = false) {
     check.title = text;
-    if (modal && !['running','paused'].includes(document.body.dataset.exam ?? '') && !dialog.open) dialog.showModal();
+    if (!update) { notify(text); return; }
+    heading.textContent = '发现应用更新';
+    message.textContent = text;
+    confirm.hidden = false;
+    if (isSafeToRefresh() && !document.hidden && !dialog.open) dialog.showModal();
   }
   function errorText(error: unknown) {
     return error instanceof Error ? error.message : String(error);
@@ -109,7 +110,7 @@ export function initPwa(): void {
   let reloading = false;
   let activating = false;
   let activationTimer: ReturnType<typeof setTimeout> | undefined;
-  const updateMessage = '新版本已准备好。请先退出考试并停车，再点击“停车后更新”。更新会重新加载页面。';
+  const updateMessage = '新版本已准备好。请先退出驾驶并停车，再点击“停车后更新”。更新会重新加载页面。';
 
   function reloadWithConsent() {
     // onNeedReload overrides the plugin's unconditional reload, including updates from other tabs.
@@ -119,7 +120,7 @@ export function initPwa(): void {
       window.location.reload();
     } else {
       consent = false;
-      tell('新版本已激活，但页面尚未刷新。请停车后确认更新。', true, !document.hidden && isSafeToRefresh());
+      tell('新版本已激活，但页面尚未刷新。请停车后确认更新。', true);
     }
   }
   const updateSW = registerSW({
@@ -127,7 +128,7 @@ export function initPwa(): void {
     onNeedRefresh() {
       waiting = true;
       check.textContent = '更新可用';
-      tell(updateMessage, true, !document.hidden && isSafeToRefresh());
+      tell(updateMessage, true);
     },
     onNeedReload() {
       clearTimeout(activationTimer);
@@ -144,7 +145,7 @@ export function initPwa(): void {
     },
     onRegisterError(error) {
       registrationError = errorText(error);
-      tell(`离线服务注册失败：${registrationError}`, false, isSafeToRefresh());
+      tell(`离线服务注册失败：${registrationError}`);
     },
   });
   confirm.onclick = async () => {
@@ -204,7 +205,7 @@ export function initPwa(): void {
       waiting = Boolean(registration.waiting);
       if (manual) tell(waiting ? updateMessage : `检查完成，当前已是最新版本（${__APP_VERSION__}）。`, waiting);
     } catch (error) {
-      tell(`检查更新失败：${errorText(error)}`, false, manual);
+      if (manual) tell(`检查更新失败：${errorText(error)}`);
     } finally {
       checking = false;
       check.disabled = false;
@@ -214,4 +215,8 @@ export function initPwa(): void {
   check.onclick = () => { void checkForUpdate(true); };
   window.setInterval(() => { if (!document.hidden) void checkForUpdate(false); }, 15 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void checkForUpdate(false); });
+  document.addEventListener('click', event => {
+    const action = (event.target as Element).closest?.('[data-exam]')?.getAttribute('data-exam');
+    if (action === 'exit' && (waiting || reloadPending)) queueMicrotask(() => tell(reloadPending ? '新版本已激活，请停车后确认刷新。' : updateMessage, true));
+  });
 }

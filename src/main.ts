@@ -29,18 +29,22 @@ app.innerHTML=`
 <footer><span>THREE.JS × CANNON-ES <span class="foot-divider">/</span> 实时驾驶交互</span><span>低速体验模式 · 非专业驾驶仿真 <button id="credits">模型来源 ↗</button></span></footer>
 </main>
 <div id="loading"><span class="loading-logo">L</span><h2>准备你的专属练习场</h2><p>正在载入精细车型与实时场景…</p></div>
-<div id="toast" role="status"></div>
-<dialog id="help-dialog"><button class="close-dialog">×</button><div class="eyebrow">DRIVER'S GUIDE</div><h2>准备好，出发。</h2><p>W / ↑ 油门 · S / ↓ / 空格 刹车<br>A / ← 左转 · D / → 右转<br>1 自由环绕 · 2 驾驶座舱 · 3 跟随视角<br>Z R档 · X N档 · C D档<br>R 重新考试 · Esc 暂停 / 关闭弹窗</p><p>屏幕方向盘可拖动，油门和刹车支持按住。<br>驾驶座舱中移动鼠标即可转头，触屏单指拖动。点击“锁定环视”可不受画布边缘限制连续转头，Esc 先解锁、再次按下才暂停；浏览器拒绝时继续悬停转头。双击场景或点击“回正视角”回正。<br>操作车辆自动收起无关面板，可点“显示面板”恢复。<br>座舱镜面直接显示后方，车外镜窗口可放大。切换 D / R 前请停车。</p><small>采用 cannon-es 射线车轮物理；参考场地规则判定，不设置分数。<br>后视镜采用实时后向镜像相机，并非精确光学反射。</small></dialog>
+<button id="toast" type="button" role="status" aria-label="关闭提示" aria-hidden="true" tabindex="-1"></button>
+<dialog id="help-dialog"><button class="close-dialog">×</button><div class="eyebrow">DRIVER'S GUIDE</div><h2>准备好，出发。</h2><p>W / ↑ 油门 · S / ↓ / 空格 刹车<br>A / ← 左转 · D / → 右转<br>1 自由环绕 · 2 驾驶座舱 · 3 跟随视角<br>Z R档 · X N档 · C D档<br>R 复位当前项目 · Esc 暂停 / 关闭弹窗</p><p>屏幕方向盘可拖动，油门和刹车支持按住。<br>驾驶座舱中移动鼠标即可转头，触屏单指拖动。点击“锁定环视”可不受画布边缘限制连续转头，Esc 先解锁、再次按下才暂停；浏览器拒绝时继续悬停转头。双击场景或点击“回正视角”回正。<br>操作车辆自动收起无关面板，可点“显示面板”恢复。<br>座舱镜面直接显示后方，车外镜窗口可放大。切换 D / R 前请停车。</p><small>采用 cannon-es 射线车轮物理；参考场地规则判定，不设置分数。<br>后视镜采用实时后向镜像相机，并非精确光学反射。</small></dialog>
 <dialog id="credits-dialog"><button class="close-dialog">×</button><div class="eyebrow">ASSET CREDITS</div><h2>关于这辆车</h2><p>Ferrari 458 Italia · 原作者 vicent091036<br>模型来自 Three.js 官方汽车材质示例。<br>本项目调整材质并加入物理、视角、踏板与实时镜面。</p><p><a href="https://threejs.org/examples/webgl_materials_car.html" target="_blank" rel="noopener">Three.js 官方示例 ↗</a><br><a href="https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6" target="_blank" rel="noopener">原模型页面与许可 ↗</a></p><small>本站发布者已确认拥有模型公开发布授权。<br>模型与品牌权利归原权利人；不以开源库许可替代模型许可。</small></dialog>
 <div id="expanded-wrap" hidden><div class="expanded-head"><span id="expanded-name">后视镜</span><button id="close-expanded">关闭 ×</button></div><div id="mirror-expanded"></div><p>实时后向镜像 · 与对应小窗口相同视角</p></div>`;
 
 const $=(s:string)=>document.querySelector<HTMLElement>(s)!;
 let toastTimer:ReturnType<typeof setTimeout>;
-function toast(text:string){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),2600);}
+const toastElement=$('#toast');
+function dismissToast(){clearTimeout(toastTimer);toastElement.classList.remove('show');toastElement.setAttribute('aria-hidden','true');toastElement.tabIndex=-1;}
+function toast(text:string){toastElement.textContent=text;toastElement.setAttribute('aria-hidden','false');toastElement.tabIndex=0;toastElement.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(dismissToast,4500);}
+toastElement.addEventListener('click',dismissToast);
+toastElement.addEventListener('keydown',event=>{if(event.key==='Escape'){dismissToast();event.stopPropagation();}});
 
 // Utility footer must sit outside the fixed driving layer stacking context.
 app.appendChild(document.querySelector('footer')!);
-initPwa();
+initPwa(toast);
 
 async function init(){
   const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
@@ -69,17 +73,18 @@ async function init(){
   $('#look-lock').onclick=()=>{void look.lock();renderer.domElement.focus({preventScroll:true});};
   $('#look-center').onclick=()=>{look.reset();toast('视角已回正');};
   const examUi=new ExamUi(session,action=>{
-    if(action==='select'||action.startsWith('select:')){release();session.select(getCourse(action.split(':')[1]??'right-angle'));ground.setCourse(session.course);resetPose();setView('orbit');$('#course-caption').textContent=`${session.course.number}　${session.course.name}考场`;examUi.render();}
+    if(action==='select:practice'){release();session.selectPractice();ground.setPractice();resetPose();setView('orbit');$('#course-caption').textContent='05　自由练习场';examUi.render();}
+    else if(action==='select'||action.startsWith('select:')){release();session.select(getCourse(action.split(':')[1]??'right-angle'));ground.setCourse(session.course);resetPose();setView('orbit');$('#course-caption').textContent=`${session.course.number}　${session.course.name}考场`;examUi.render();}
     if(action==='start')reset(true);
     if(action==='retry')reset();
     if(action==='pause')pause();
-    if(action==='resume'){release();physics.clearAccumulator();session.resume();examUi.render();focusScene();toast('已继续考试 · 请重新按下驾驶键');}
-    if(action==='exit'){release();resetPose();session.exit();drivingUi.setFocused(false);setView('orbit');examUi.render();}
+    if(action==='resume'){release();physics.clearAccumulator();session.resume();examUi.render();focusScene();toast(`已继续${session.mode==='practice'?'练习':'考试'} · 请重新按下驾驶键`);}
+    if(action==='exit'){release();session.exit();ground.setCourse(session.course);resetPose();drivingUi.setFocused(false);setView('orbit');$('#course-caption').textContent=`${session.course.number}　${session.course.name}考场`;examUi.render();}
   });
   function pause(reason?:string){if(session.state!=='running')return;release();physics.clearAccumulator();session.pause(reason);examUi.render();}
   function requestGear(gear:Gear){if(session.state!=='running')return false;if(!physics.setGear(gear)){toast(gear==='R'?'车辆仍在前进，请刹停后挂 R 档':gear==='D'?'车辆仍在倒退，请刹停后挂 D 档':'请先刹停车辆，再切换行驶方向');return false;}document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===gear));return true;}
   function setView(next:'orbit'|'cockpit'|'follow'){if(next!==view)look.unlock();view=next;orbit.enabled=view==='orbit';look.reset();$('#look-lock').hidden=view!=='cockpit'||!matchMedia('(pointer:fine)').matches;$('#look-center').hidden=view!=='cockpit';document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'移动鼠标转头 · 双击回正':'车辆跟随 · 自由驾驶';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
-    if(view==='orbit'&&!session.active){const b=session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=80;orbit.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
+    if(view==='orbit'&&!session.active){const b=session.mode==='practice'?{minX:-23,maxX:23,minZ:-31,maxZ:31}:session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=80;orbit.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
     else if(view==='orbit'){orbit.maxDistance=16;camera.position.copy(car.root.localToWorld(new THREE.Vector3(-6,3.25,-6.6)));orbit.target.copy(car.root.position).add(new THREE.Vector3(0,.65,0));camera.fov=38;camera.updateProjectionMatrix();}
     else{camera.fov=view==='cockpit'?70:48;camera.updateProjectionMatrix();}
   }
@@ -87,7 +92,7 @@ async function init(){
   document.querySelectorAll<HTMLElement>('[data-gear]').forEach(e=>{const key={R:'Z',N:'X',D:'C'}[e.dataset.gear!];e.title=`${e.dataset.gear} 档 (${key})`;e.innerHTML=`${e.dataset.gear}<kbd>${key}</kbd>`;e.onclick=()=>requestGear(e.dataset.gear as Gear);});
   document.querySelectorAll<HTMLElement>('[data-color]').forEach(e=>e.onclick=()=>{car.paint.color.set(e.dataset.color!);$('#paint-name').textContent=e.dataset.name!;document.querySelectorAll('[data-color]').forEach(b=>b.classList.toggle('selected',b===e));});
   const release=()=>{keys.clear();for(const name of ['throttle','brake'] as const){const el=$(`#${name}`);for(const id of held[name])if(el.hasPointerCapture(id))el.releasePointerCapture(id);held[name].clear();}const pad=$('#steering-pad');if(steeringOwner!==null&&pad.hasPointerCapture(steeringOwner))pad.releasePointerCapture(steeringOwner);steeringOwner=null;dragSteer=steerTarget=steerCurrent=0;look.unlock();};
-  window.addEventListener('blur',()=>pause('窗口已失去焦点。确认准备好后继续。'));document.addEventListener('visibilitychange',()=>{if(document.hidden)pause('你离开了考试窗口。确认准备好后继续。');});
+  window.addEventListener('blur',()=>pause('窗口已失去焦点。确认准备好后继续。'));document.addEventListener('visibilitychange',()=>{if(document.hidden)pause(`你离开了${session.mode==='practice'?'练习':'考试'}窗口。确认准备好后继续。`);});
   const drivingCodes=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space']);
   const commandCodes=new Set(['KeyZ','KeyX','KeyC','Digit1','Digit2','Digit3','KeyR','Escape']);
   const textFocus=(target:EventTarget|null)=>target instanceof HTMLElement&&!!target.closest('input,textarea,select,button,a,[contenteditable],[role="textbox"],[role="button"]')&&target!==renderer.domElement;
@@ -113,7 +118,7 @@ async function init(){
   pad.onpointermove=e=>{if(steeringOwner===e.pointerId)dragSteer=THREE.MathUtils.clamp((startX-e.clientX)/95,-1,1);};
   const endSteering=(e:PointerEvent)=>{if(steeringOwner!==e.pointerId)return;steeringOwner=null;dragSteer=0;};
   pad.onpointerup=pad.onpointercancel=pad.onlostpointercapture=endSteering;
-  function resetPose(){const c=session.course;physics.reset(c.start.x,c.start.z,c.startYaw);car.root.position.set(c.start.x,0,c.start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),c.startYaw);prevPos.copy(car.root.position);}
+  function resetPose(){const start=session.mode==='practice'?{x:0,z:0,startYaw:0}: {...session.course.start,startYaw:session.course.startYaw};physics.reset(start.x,start.z,start.startYaw);car.root.position.set(start.x,0,start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),start.startYaw);prevPos.copy(car.root.position);}
   function reset(firstStart=false){release();drivingUi.setFocused(true);resetPose();session.start();setView(firstStart?'cockpit':view);examUi.render();focusScene();document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===physics.gear));}
   $('#reset').onclick=()=>reset();
   $('#lights-toggle').onclick=()=>{headlights=!headlights;lamps.forEach(l=>l.intensity=headlights?18:0);$('#lights-toggle span').textContent=headlights?'开启':'关闭';toast(headlights?'车灯已开启':'车灯已关闭');};
@@ -123,7 +128,7 @@ async function init(){
   document.querySelectorAll<HTMLElement>('[data-mirror]').forEach(e=>e.onclick=()=>{look.unlock();expanded=e.dataset.mirror!;$('#expanded-name').textContent=names[expanded];$('#expanded-wrap').hidden=false;});
   function closeExpanded(){expanded=null;$('#expanded-wrap').hidden=true;}
   $('#close-expanded').onclick=closeExpanded;
-  $('#help').onclick=()=>{pause('操作指南已打开，关闭后可继续考试。');release();($('#help-dialog') as HTMLDialogElement).showModal();};$('#credits').onclick=()=>{pause();release();($('#credits-dialog') as HTMLDialogElement).showModal();};document.querySelectorAll<HTMLElement>('.close-dialog').forEach(e=>e.onclick=()=>e.closest('dialog')!.close());
+  $('#help').onclick=()=>{pause(`操作指南已打开，关闭后可继续${session.mode==='practice'?'练习':'考试'}。`);release();($('#help-dialog') as HTMLDialogElement).showModal();};$('#credits').onclick=()=>{pause();release();($('#credits-dialog') as HTMLDialogElement).showModal();};document.querySelectorAll<HTMLElement>('.close-dialog').forEach(e=>e.onclick=()=>e.closest('dialog')!.close());
   window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=eye.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();eye.updateProjectionMatrix();});
   $('#loading').classList.add('loaded');setTimeout(()=>$('#loading').remove(),700);
   let last=performance.now(),mirrorTime=0,frames=0,fpsTime=last;
@@ -136,10 +141,10 @@ async function init(){
     // Small keyboard-only ramp; pointer wheel remains instantaneous for narrow parking turns.
     steerCurrent+=THREE.MathUtils.clamp(steerTarget-steerCurrent,-dt*9,dt*9);
     const input={throttle:!modal&&(held.throttle.size>0||keys.has('KeyW')||keys.has('ArrowUp'))?1:0,brake:modal?1:(held.brake.size>0||keys.has('KeyS')||keys.has('ArrowDown')||keys.has('Space')?1:0),steer:steeringOwner!==null?dragSteer:steerCurrent};
-    if(modal&&session.state==='running')pause('弹窗已打开，关闭后可继续考试。');
+    if(modal&&session.state==='running')pause(`弹窗已打开，关闭后可继续${session.mode==='practice'?'练习':'考试'}。`);
     if(session.state==='running')physics.update(dt,input,()=>{
       const q=physics.chassis.quaternion;
-      session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0});
+      if(session.mode==='exam')session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0});
       if(session.state==='result'){release();examUi.render();return false;}
     });
     car.root.position.set(physics.chassis.position.x,physics.chassis.position.y-.65,physics.chassis.position.z);car.root.quaternion.set(physics.chassis.quaternion.x,physics.chassis.quaternion.y,physics.chassis.quaternion.z,physics.chassis.quaternion.w);

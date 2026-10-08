@@ -15,15 +15,35 @@ body[data-view="cockpit"] .model-card,body[data-view="cockpit"] .intro{visibilit
 @media(max-width:780px){#exam-overlay{inset:65px 0 0;padding:28px 20px 60px}.project-heading{margin:20px 0 24px}.project-heading h1{font-size:35px;letter-spacing:-1px}.project-heading p{font-size:12px}.season-note{display:none}.project-grid{grid-template-columns:1fr;gap:14px}.project-feature{min-height:225px;padding:22px}.project-feature h2{font-size:25px}.project-link{margin-top:32px}.project-feature .course-diagram{height:220px}.project-placeholder{padding:17px}.project-placeholder h3{font-size:18px}.project-placeholder p{font-size:10px}.project-bottom{font-size:9px;line-height:1.8;display:block}.project-bottom span{display:block;margin-top:8px}.briefing-grid{grid-template-columns:1fr;gap:18px}.diagram-panel .course-diagram{height:240px}.briefing-controls{display:block;font-size:10px}.briefing-controls>span{display:block;margin-bottom:10px}.exam-bottom-actions{gap:8px}.exam-primary,.exam-secondary{font-size:11px;padding:14px 16px}.result-card{padding:28px 18px}.result-card h1{font-size:28px}#exam-hud{left:12px;right:12px;top:12px;padding:10px 12px;gap:10px;justify-content:space-between}.exam-actions{gap:4px}.exam-actions button{padding:8px;min-height:40px}#exam-hud strong{font-size:12px}#exam-hud strong span{font-size:9px;margin-left:6px}.views{top:95px;left:12px;right:auto}.views button{min-height:38px}.drive-console .gear-block .gears button{width:28px;min-height:27px}.gears kbd{display:none}body[data-exam="running"] .drive-console{bottom:12px;height:116px}body[data-exam="running"] .right-tools{bottom:141px}.right-tools button{min-width:44px;min-height:44px}.scene-caption{display:none}.mirror-strip{top:153px}.pedal{min-width:48px}body[data-exam="projects"] footer,body[data-exam="briefing"] footer{padding:12px 20px}.header-center{display:none}}
 @media(max-height:600px) and (min-width:781px){#exam-overlay{padding-top:25px}.project-heading{margin:15px 0 20px}.project-heading h1{font-size:36px}.project-feature{min-height:245px}.project-feature .course-diagram{height:230px}.project-link{margin-top:25px}.project-placeholder{padding:15px}.result-card{margin:0 auto;padding:25px}.briefing-page h1{font-size:30px}}
 
-.project-available{cursor:pointer;background:#e2e8de;border-color:#bdccbd}.project-available:hover{background:#d9e3d6;border-color:#6a856f}.project-available>span:last-child{color:#355343;border-color:#a8bda9}
+.project-available{cursor:url('./assets/cursors/click.svg') 3 2,pointer;background:#e2e8de;border-color:#bdccbd}.project-available:hover{background:#d9e3d6;border-color:#6a856f}.project-available>span:last-child{color:#355343;border-color:#a8bda9}
 body[data-exam="projects"] #viewport,body[data-exam="briefing"] #viewport{visibility:hidden}.views button{transition:none}body[data-exam="projects"] main,body[data-exam="briefing"] main{visibility:visible}body[data-exam="projects"] main>*:not(footer),body[data-exam="briefing"] main>*:not(footer){visibility:hidden;pointer-events:none}
 .parking-status{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:#596d5e;font-variant-numeric:tabular-nums}.parking-status span{white-space:nowrap}.parking-status b{font-weight:650;color:#254b36}@media(max-width:780px){#exam-hud:has(.parking-status){align-items:flex-start}.parking-status{gap:3px 9px;max-width:210px;margin-top:5px;font-size:9px}.parking-status span{white-space:nowrap}#exam-hud:has(.parking-status) .exam-actions button{padding:6px;font-size:10px;min-height:35px}}
 
 /* Original LARRIA cursor and cockpit look controls; preserve the existing shell. */
 :root{cursor:url('./assets/cursors/pointer.svg') 3 2,auto}
 button,a,[role="slider"]{cursor:url('./assets/cursors/click.svg') 3 2,pointer}
-#steering-pad{cursor:url('./assets/cursors/steer.svg') 12 14,ew-resize}
+#steering-pad,#steering-pad *{cursor:url('./assets/cursors/steer.svg') 12 14,ew-resize}
+button:disabled,button[aria-disabled="true"],a[aria-disabled="true"],[role="button"][aria-disabled="true"]{cursor:not-allowed;transform:none!important}
+button:disabled:hover,button[aria-disabled="true"]:hover{transform:none;box-shadow:none}
 .right-tools #look-lock,.right-tools #look-center{font-size:10px;min-height:40px;white-space:nowrap}
 body[data-look-locked="true"] #viewport canvas{cursor:none}
 body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
 @media(max-width:780px){.right-tools #look-center{font-size:9px;padding:6px 8px;min-width:44px}.right-tools #look-lock{display:none}}
+/* Top-of-briefing action stays reachable before scrolling, including short phone screens. */
+.briefing-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-top:12px}
+.briefing-top h1{margin:0 0 8px}.briefing-top .exam-lead{margin:0}
+.briefing-top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;padding-top:3px}
+.practice-panel .practice-map{aspect-ratio:1.15;max-height:270px;margin:15px auto 6px;border-radius:10px;border:15px solid #d8dfd1;background:repeating-linear-gradient(90deg,transparent 0 15%,#d8dfd180 15% 15.4%,transparent 15.4% 30%),repeating-linear-gradient(0deg,#596c60 0 27%,#d8dfd180 27% 27.4%,#596c60 27.4% 54%);display:flex;justify-content:space-between;align-items:flex-end;padding:14px;color:#f4f3e8;font-size:11px}
+.practice-map span:last-child{font-size:9px}
+#toast.show{pointer-events:auto;cursor:url('./assets/cursors/click.svg') 3 2,pointer}
+#toast{border:1px solid #a4bba645;text-align:left;max-width:min(420px,90vw);white-space:normal;line-height:1.5;box-shadow:0 8px 28px #1c352440}
+#pwa-dialog{padding:30px;max-width:min(440px,90vw)}
+#pwa-dialog[open]{display:flex;flex-direction:column;align-items:flex-start;gap:17px}
+#pwa-dialog h2,#pwa-dialog p{margin:0}
+#pwa-dialog h2{font-size:23px}
+#pwa-dialog p{line-height:1.8}
+#pwa-dialog button{border:1px solid #c4cec0;border-radius:7px;padding:11px 16px;background:#f4f5ee;font-size:12px;min-height:42px}
+#pwa-dialog button:nth-last-child(2){background:#355343;color:#f7f7ed}
+#pwa-dialog button:disabled{opacity:.55}
+@media(max-width:780px){.briefing-top{flex-direction:column;gap:12px}.briefing-top-actions{width:100%;padding-top:0}.briefing-top-actions .exam-primary{flex:1;order:-1}.briefing-top-actions .exam-secondary{white-space:nowrap}.briefing-page h1{font-size:clamp(30px,8vw,40px)}.briefing-grid{margin-top:20px}}
+@media(max-height:700px) and (min-width:781px){.briefing-top{margin-top:6px}.briefing-top h1{font-size:30px}.briefing-grid{margin-top:20px}}

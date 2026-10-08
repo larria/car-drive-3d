@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
 async function mockedPwa(page) {
-  await page.route('**/pwa-fixture.html', route => route.fulfill({ contentType: 'text/html', body: '<footer><span>练习场</span></footer>' }));
+  await page.route('**/pwa-fixture.html', route => route.fulfill({ contentType: 'text/html', body: '<footer><span>练习场</span></footer><button id="toast" role="status" hidden></button>' }));
   await page.goto('pwa-fixture.html');
   const source = readFileSync(new URL('../src/pwa.ts', import.meta.url), 'utf8')
     .replace("import { registerSW } from 'virtual:pwa-register';", 'const registerSW = window.mockRegisterSW;')
@@ -19,7 +19,7 @@ async function mockedPwa(page) {
       return async () => { window.updateCalls++; };
     };
   });
-  await page.addScriptTag({ content: ts.transpile(source, { target: ts.ScriptTarget.ES2022 }) + '\ninitPwa(); initPwa();' });
+  await page.addScriptTag({ content: ts.transpile(source, { target: ts.ScriptTarget.ES2022 }) + `\nconst notify = text => {const toast = document.querySelector('#toast'); toast.hidden = false; toast.textContent = text; toast.onclick = () => toast.hidden = true;}; initPwa(notify); initPwa(notify);` });
 }
 
 test('updates require consent and stationary telemetry; external activation never auto reloads', async ({ page }) => {
@@ -28,6 +28,10 @@ test('updates require consent and stationary telemetry; external activation neve
   await page.evaluate(() => window.pwaCallbacks.onNeedRefresh());
   await expect(page.locator('#pwa-dialog')).not.toBeVisible();
   await page.locator('#pwa-update').click();
+  await expect(page.locator('#pwa-dialog')).not.toBeVisible();
+  await page.evaluate(() => { window.larria.physics.speed = 0; document.body.dataset.exam = 'projects'; });
+  await page.locator('#pwa-update').click();
+  await page.evaluate(() => { window.larria.physics.speed = 5; });
   await page.getByRole('button', { name: '停车后更新' }).click();
   expect(await page.evaluate(() => window.updateCalls)).toBe(0);
   await expect(page.locator('#pwa-dialog')).toContainText('仍在行驶');
@@ -51,13 +55,14 @@ test('manual update errors and iOS installation fallback are clear', async ({ pa
     Object.defineProperty(navigator, 'maxTouchPoints', { value: 5 });
   });
   await page.locator('#pwa-install').click();
-  await expect(page.locator('#pwa-dialog')).toContainText('添加到主屏幕');
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('添加到主屏幕');
+  await expect(page.locator('#pwa-dialog')).not.toBeVisible();
+  await page.locator('#toast').click();await expect(page.locator('#toast')).toBeHidden();
   await page.evaluate(() => window.pwaCallbacks.onRegisteredSW('sw.js', {
     update: async () => { throw new Error('测试网络错误'); },
   }));
   await page.locator('#pwa-update').click();
-  await expect(page.locator('#pwa-dialog')).toContainText('检查更新失败：测试网络错误');
+  await expect(page.locator('#toast')).toContainText('检查更新失败：测试网络错误');
 });
 
 test('manifest, installation UI, precached model and offline reload', async ({ page, context, request }) => {
@@ -75,9 +80,9 @@ test('manifest, installation UI, precached model and offline reload', async ({ p
     return Boolean(cached);
   })).toBe(true);
   await page.locator('#pwa-update').click();
-  await expect(page.locator('#pwa-dialog')).toBeVisible();
-  await expect(page.locator('#pwa-dialog')).toContainText('检查完成');
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('检查完成');
+  await expect(page.locator('#pwa-dialog')).not.toBeVisible();
+  await page.locator('#toast').click();await expect(page.locator('#toast')).not.toHaveClass(/show/);
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('#pwa-update')).toBeVisible();
@@ -89,14 +94,15 @@ test('manifest, installation UI, precached model and offline reload', async ({ p
   });
   expect(offlineResources.every(resource => resource.ok && resource.bytes > 1000)).toBe(true);
   await page.locator('#pwa-update').click();
-  await expect(page.locator('#pwa-dialog')).toContainText('离线状态');
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('离线状态');
+  await page.locator('#toast').click();await expect(page.locator('#toast')).not.toHaveClass(/show/);
   await page.waitForFunction(() => window.larria?.ready);
-  await page.locator('[data-exam=select]').click();
+  await page.locator('[data-exam="select:practice"]').click();
   await page.locator('[data-exam=start]').click();
   await expect(page.locator('body')).toHaveAttribute('data-exam', 'running');
+  await expect(page.locator('body')).toHaveAttribute('data-mode', 'practice');
   await expect(page.locator('body')).toHaveAttribute('data-view', 'cockpit');
-  await page.screenshot({path:'artifacts/exam-offline.png'});
+  await page.screenshot({path:'artifacts/practice-offline.png'});
   await page.locator('[data-exam="exit"]:visible').click();
   await page.locator('[data-exam="select:s-curve"]').click();
   await expect(page.locator('.briefing-page h1')).toHaveText('曲线行驶');
@@ -107,10 +113,10 @@ test('manifest, installation UI, precached model and offline reload', async ({ p
 });
 
 
-test('running and paused exams block updates even at zero speed', async ({ page }) => {
+test('running and paused exams and practice block updates even at zero speed', async ({ page }) => {
   await mockedPwa(page);
-  for (const state of ['running', 'paused']) {
-    await page.evaluate(state => { document.body.dataset.exam = state; window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); window.pwaCallbacks.onNeedReload(); }, state);
+  for (const mode of ['exam','practice']) for (const state of ['running', 'paused']) {
+    await page.evaluate(({state,mode}) => { document.body.dataset.mode=mode;document.body.dataset.exam = state; window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); window.pwaCallbacks.onNeedReload(); }, {state,mode});
     await expect(page.locator('#pwa-dialog')).not.toBeVisible();
     expect(await page.evaluate(() => isSafeToRefresh())).toBe(false);
     expect(page.url()).toContain('pwa-fixture.html');

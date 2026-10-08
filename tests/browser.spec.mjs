@@ -27,7 +27,7 @@ test('S failures, pause, switching ownership, stable resources and narrow UI',as
  await test.info().attach('course-resources',{body:JSON.stringify(memory,null,2),contentType:'application/json'});
 });
 test('complete actual driving pass using only held keyboard and screen steering',async({page})=>{
- await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(1);await page.keyboard.press('w');expect(await state(page)).toBe('projects');await start(page);
+ await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);await page.keyboard.press('w');expect(await state(page)).toBe('projects');await start(page);
  await expect(page.locator('button[data-view].active')).toHaveCount(1);await expect(page.locator('button[data-view="cockpit"]')).toHaveClass('active');
  const box=await page.locator('#steering-pad').boundingBox(),cx=box.x+box.width/2,cy=box.y+box.height/2;
  await page.mouse.move(cx,cy);await page.mouse.down();await page.keyboard.down('w');let turning=false,straight=false;
@@ -130,8 +130,8 @@ test('Chrome CDP three-finger throttle, steering and cockpit look remain indepen
  await dispatch('touchEnd',[]);expect((await sample()).throttle).toBe(0);
 });
 
-test('parking projects open their own rules and default cockpit, free remains disabled',async({page})=>{
- await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(1);
+test('parking projects open their own rules and default cockpit, free remains independent',async({page})=>{
+ await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);
  for(const [id,title] of [['parallel-parking','侧方位停车'],['reverse-garage','倒车入库']]){
   await page.locator(`[data-exam="select:${id}"]`).click();
   await expect(page.locator('.briefing-page h1')).toHaveText(title);
@@ -144,6 +144,60 @@ test('parking projects open their own rules and default cockpit, free remains di
   await expect(page.locator('[data-parking="count"]')).toContainText('0');
   await page.locator('[data-exam="exit"]:visible').click();
  }
+});
+
+test('free practice drives forward, stops and reverses without scoring; switching clears scene and rules',async({page})=>{
+ await open(page);await page.locator('[data-exam="select:practice"]').click();
+ await expect(page.locator('.briefing-page h1')).toHaveText('自由练习');
+ await expect(page.locator('.exam-rules')).toContainText('不设考试规则与时限');
+ await expect(page.locator('.briefing-top-actions [data-exam="start"]')).toBeVisible();
+ await page.screenshot({path:'artifacts/practice-briefing.png'});
+ await page.locator('[data-exam="start"]').click();
+ await expect(page.locator('body')).toHaveAttribute('data-mode','practice');
+ await expect(page.locator('#exam-hud')).toContainText('自由驾驶中');
+ await expect(page.locator('#exam-hud [data-parking]')).toHaveCount(0);
+ const startZ=(await pos(page))[2];await page.keyboard.down('w');
+ await expect.poll(async()=>(await pos(page))[2]).toBeLessThan(startZ-.6);
+ await page.keyboard.up('w');await page.keyboard.down('s');
+ await expect.poll(async()=>Math.abs(await page.evaluate(()=>window.larria.physics.speed))).toBeLessThan(.1);
+ await page.keyboard.up('s');await page.keyboard.press('z');
+ await expect.poll(async()=>page.evaluate(()=>window.larria.physics.gear)).toBe('R');
+ const reverseZ=(await pos(page))[2];await page.keyboard.down('w');
+ await expect.poll(async()=>(await pos(page))[2]).toBeGreaterThan(reverseZ+.4);
+ await page.keyboard.up('w');expect(await page.evaluate(()=>window.larria.session.result)).toBeNull();
+ await page.screenshot({path:'artifacts/practice-driving.png'});
+ await page.locator('[data-exam="pause"]:visible').click();const frozen=await pos(page);
+ await page.waitForTimeout(250);expect(await pos(page)).toEqual(frozen);
+ await expect(page.locator('.result-card h1')).toHaveText('练习已暂停');
+ await page.locator('.result-card [data-exam="retry"]').click();expect((await pos(page))[2]).toBe(0);
+ expect(await page.evaluate(()=>window.larria.session.mode)).toBe('practice');
+ for(const selector of ['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:practice']){
+  await page.locator('[data-exam="exit"]:visible').click();await page.locator(`[data-exam="${selector}"]`).click();
+  const group=await page.evaluate(()=>{const groups=[];window.larria.scene.traverse(o=>{if(o.name.startsWith('course:')||o.name.startsWith('practice:'))groups.push(o.name)});return groups});
+  expect(group).toEqual([selector==='select:practice'?'practice:open-court':`course:${selector==='select'?'right-angle':selector.slice(7)}`]);
+  await page.locator('[data-exam="start"]').click();expect(await page.evaluate(()=>window.larria.session.result)).toBeNull();
+ }
+ await page.locator('[data-exam="exit"]:visible').click();expect(await page.evaluate(()=>window.larria.session.mode)).toBe('exam');
+});
+
+test('briefing actions remain above fold on short phone and desktop, and cursor states differ',async({page})=>{
+ await page.setViewportSize({width:390,height:620});await open(page);
+ for(const selector of ['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:practice']){
+  await page.locator(`[data-exam="${selector}"]`).click();const button=page.locator('.briefing-top-actions [data-exam="start"]');
+  await expect.poll(()=>page.locator('#exam-overlay').evaluate(el=>el.scrollTop)).toBe(0);
+  const bounds=await button.evaluate(el=>{const r=el.getBoundingClientRect();return{top:r.top,bottom:r.bottom}});
+  expect(bounds.top).toBeGreaterThanOrEqual(65);expect(bounds.bottom).toBeLessThanOrEqual(620);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
+  await page.screenshot({path:`artifacts/short-${selector.replace(':','-')}.png`});
+  await page.locator('.briefing-top-actions [data-exam="exit"]').click();
+ }
+ await page.setViewportSize({width:1000,height:550});await page.locator('[data-exam="select:practice"]').click();
+ expect(await page.locator('.briefing-top-actions [data-exam="start"]').evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(550);
+ await page.locator('[data-exam="start"]').click();
+ expect(await page.locator('#steering-pad').evaluate(el=>getComputedStyle(el).cursor)).toContain('12 14, ew-resize');
+ expect(await page.locator('#exam-hud [data-exam="pause"]').evaluate(el=>getComputedStyle(el).cursor)).toContain('3 2, pointer');
+ await page.evaluate(()=>document.querySelector('#exam-hud [data-exam="pause"]').disabled=true);
+ expect(await page.locator('#exam-hud [data-exam="pause"]').evaluate(el=>getComputedStyle(el).cursor)).toBe('not-allowed');
 });
 
 test('all courses preserve selected view on failure and success retry with matching mirrors',async({page})=>{

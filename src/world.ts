@@ -125,7 +125,7 @@ export function createWorld(scene: THREE.Scene) {
   }
   // Course-owned resources are replaced without disturbing shared campus assets.
   let courseGroup = new THREE.Group();
-  function setCourse(course: CourseDefinition) {
+  function replaceCourseGroup(name: string) {
     const geometries=new Set<THREE.BufferGeometry>(), materials=new Set<THREE.Material>(), textures=new Set<THREE.Texture>();
     courseGroup.traverse(object=>{
       if(object instanceof THREE.Mesh){
@@ -138,7 +138,10 @@ export function createWorld(scene: THREE.Scene) {
     });
     world.remove(courseGroup);
     geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());
-    courseGroup=new THREE.Group();courseGroup.name=`course:${course.id}`;world.add(courseGroup);
+    courseGroup=new THREE.Group();courseGroup.name=name;world.add(courseGroup);
+  }
+  function setCourse(course: CourseDefinition) {
+    replaceCourseGroup(`course:${course.id}`);
     const parking=isParkingCourse(course);
     (parking?course.roads:[course.polygon]).forEach((points,index)=>{
       const road=new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(points.map(p=>new THREE.Vector2(p.x,-p.z)))),material(parking&&index?'#45605c':'#525b59'));
@@ -190,6 +193,26 @@ export function createWorld(scene: THREE.Scene) {
     const [f1,f2]=course.finish;
     label('FINISH',(f1.x+f2.x)/2+(parking&&course.id==='parallel-parking'?0:3),(f1.z+f2.z)/2+(parking&&course.id==='parallel-parking'?-1:0),2.6,.6);
     if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);}
+    world.updateMatrixWorld(true);
+  }
+  function setPractice() {
+    replaceCourseGroup('practice:open-court');
+    const marking=new THREE.MeshStandardMaterial({color:'#e4e3d8',roughness:1});
+    const guide=new THREE.MeshStandardMaterial({color:'#dab851',roughness:1});
+    const box=new THREE.BoxGeometry(1,1,1);
+    const paint=(x:number,z:number,sx:number,sz:number,mat:THREE.Material=marking)=>{
+      const mesh=new THREE.Mesh(box,mat);
+      mesh.position.set(x,.04,z);mesh.scale.set(sx,.008,sz);
+      mesh.receiveShadow=true;courseGroup.add(mesh);
+    };
+    // Flush paint is visual guidance only: there is no finish line, penalty or collision.
+    for(const x of [-14,0,14])for(const z of [-18,0,18]){
+      paint(x-2.6,z, .065,7);paint(x+2.6,z,.065,7);
+      paint(x,z-3.5,5.2,.065);paint(x,z+3.5,5.2,.065);
+    }
+    for(const x of [-7,7])for(let z=-26;z<=26;z+=3)paint(x,z,.08,1.3,guide);
+    const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);courseGroup.add(world.children[world.children.length-1]);};
+    label('FREE DRIVE',0,-29,11,1.2);
     world.updateMatrixWorld(true);
   }
   groundText('LARRIA', -9, -6, 10, 2.3);
@@ -278,5 +301,5 @@ export function createWorld(scene: THREE.Scene) {
     world.add(mesh);
   }
   world.updateMatrixWorld(true);
-  return { walls, setCourse };
+  return { walls, setCourse, setPractice };
 }
