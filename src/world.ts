@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RIGHT_ANGLE } from './courses/right-angle';
+import { PRACTICE_ISLANDS } from './practice-layout';
 import { isParkingCourse, type CourseDefinition, type Point } from './courses/course-definition';
 
 export type WorldWall = { x: number; y: number; z: number; sx: number; sy: number; sz: number };
@@ -140,12 +141,14 @@ export function createWorld(scene: THREE.Scene) {
     geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());
     courseGroup=new THREE.Group();courseGroup.name=name;world.add(courseGroup);
   }
-  function setCourse(course: CourseDefinition) {
-    replaceCourseGroup(`course:${course.id}`);
+  function drawCourse(course: CourseDefinition, parent: THREE.Group) {
+    const island=new THREE.Group();
+    island.name=`island:${course.id}`;
+    parent.add(island);
     const parking=isParkingCourse(course);
     (parking?course.roads:[course.polygon]).forEach((points,index)=>{
       const road=new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(points.map(p=>new THREE.Vector2(p.x,-p.z)))),material(parking&&index?'#45605c':'#525b59'));
-      road.rotation.x=-Math.PI/2;road.position.y=.021+index*.001;road.receiveShadow=true;courseGroup.add(road);
+      road.rotation.x=-Math.PI/2;road.position.y=.021+index*.001;road.receiveShadow=true;island.add(road);
     });
     const paintGeometry=new THREE.BoxGeometry(1,1,1);
     const edgeMaterial=material('#e4e3d8'), guideMaterial=material('#dab851'), markMaterial=material('#92ba9f');
@@ -154,7 +157,7 @@ export function createWorld(scene: THREE.Scene) {
       const mesh=new THREE.Mesh(paintGeometry,mat);
       mesh.position.set((a.x+b.x)/2,.04,(a.z+b.z)/2);
       mesh.scale.set(Math.hypot(dx,dz),.008,.065);
-      mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;courseGroup.add(mesh);
+      mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;island.add(mesh);
     };
     if(parking)course.penaltyLines.forEach(({segment:[a,b],reason})=>paint(a,b,reason.startsWith('碰擦')?guideMaterial:edgeMaterial));
     else course.boundaries.forEach(([a,b])=>paint(a,b));
@@ -170,7 +173,7 @@ export function createWorld(scene: THREE.Scene) {
       const z=course.parkZone;
       const fill=new THREE.Mesh(new THREE.PlaneGeometry(z.maxX-z.minX,z.maxZ-z.minZ),
         new THREE.MeshBasicMaterial({color:'#92ba9f',transparent:true,opacity:.12,depthWrite:false}));
-      fill.rotation.x=-Math.PI/2;fill.position.set((z.minX+z.maxX)/2,.027,(z.minZ+z.maxZ)/2);courseGroup.add(fill);
+      fill.rotation.x=-Math.PI/2;fill.position.set((z.minX+z.maxX)/2,.027,(z.minZ+z.maxZ)/2);island.add(fill);
     }else{
       dashed(...course.finish,.45,.24,markMaterial);
       // Carry dash phase across sampled segments instead of restarting every chord.
@@ -187,32 +190,41 @@ export function createWorld(scene: THREE.Scene) {
       }
     }
     // Reparent each freshly painted label so its canvas texture is course-owned.
-    const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);courseGroup.add(world.children[world.children.length-1]);};
+    const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);island.add(world.children[world.children.length-1]);};
     label(`${course.label} / ${course.number}`,(course.bounds.minX+course.bounds.maxX)/2,course.bounds.minZ-2.5,8,1);
     label('START',course.start.x,course.start.z+(parking?Math.sign(course.start.z)*2.5:2.5),2.6,.6);
     const [f1,f2]=course.finish;
     label('FINISH',(f1.x+f2.x)/2+(parking&&course.id==='parallel-parking'?0:3),(f1.z+f2.z)/2+(parking&&course.id==='parallel-parking'?-1:0),2.6,.6);
     if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);}
+    return island;
+  }
+  function setCourse(course: CourseDefinition) {
+    replaceCourseGroup(`course:${course.id}`);
+    drawCourse(course,courseGroup);
     world.updateMatrixWorld(true);
   }
   function setPractice() {
     replaceCourseGroup('practice:open-court');
-    const marking=new THREE.MeshStandardMaterial({color:'#e4e3d8',roughness:1});
-    const guide=new THREE.MeshStandardMaterial({color:'#dab851',roughness:1});
+    for(const placement of PRACTICE_ISLANDS){
+      const island=drawCourse(placement.course,courseGroup);
+      island.position.set(placement.x,0,placement.z);
+    }
+    // Subtle painted central wayfinding; each unchanged island is visual only.
+    const guide=new THREE.MeshStandardMaterial({color:'#819582',roughness:1});
     const box=new THREE.BoxGeometry(1,1,1);
-    const paint=(x:number,z:number,sx:number,sz:number,mat:THREE.Material=marking)=>{
-      const mesh=new THREE.Mesh(box,mat);
-      mesh.position.set(x,.04,z);mesh.scale.set(sx,.008,sz);
+    const paint=(x:number,z:number,sx:number,sz:number)=>{
+      const mesh=new THREE.Mesh(box,guide);
+      mesh.position.set(x,.033,z);mesh.scale.set(sx,.006,sz);
       mesh.receiveShadow=true;courseGroup.add(mesh);
     };
-    // Flush paint is visual guidance only: there is no finish line, penalty or collision.
-    for(const x of [-14,0,14])for(const z of [-18,0,18]){
-      paint(x-2.6,z, .065,7);paint(x+2.6,z,.065,7);
-      paint(x,z-3.5,5.2,.065);paint(x,z+3.5,5.2,.065);
-    }
-    for(const x of [-7,7])for(let z=-26;z<=26;z+=3)paint(x,z,.08,1.3,guide);
+    for(const x of [-7,7])for(let z=-39;z<=38;z+=3)paint(x,z,.055,1.25);
+    for(const z of [-7,7])for(let x=-42;x<=40;x+=3)paint(x,z,1.25,.055);
     const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);courseGroup.add(world.children[world.children.length-1]);};
-    label('FREE DRIVE',0,-29,11,1.2);
+    label('FREE DRIVE',0,-4,8,1);
+    label('01  RIGHT ANGLE',-26,38,10,1);
+    label('02  S CURVE',17,40,10,1);
+    label('03  PARALLEL',-36,-38,10,1);
+    label('04  GARAGE',20,-39,10,1);
     world.updateMatrixWorld(true);
   }
   groundText('LARRIA', -9, -6, 10, 2.3);

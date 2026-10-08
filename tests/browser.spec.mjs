@@ -7,9 +7,9 @@ const state=page=>page.evaluate(()=>window.larria.session.state);
 const pos=page=>page.evaluate(()=>window.larria.physics.chassis.position.toArray());
 test('S failures, pause, switching ownership, stable resources and narrow UI',async({page})=>{
  await open(page);await startS(page);
- await page.keyboard.press('z');await page.keyboard.down('w');await expect(page.locator('.result-reason')).toHaveText('中途倒车，考试不合格');await page.keyboard.up('w');
+ await page.keyboard.press('z');await page.keyboard.down('s');await expect(page.locator('.result-reason')).toHaveText('中途倒车，考试不合格');await page.keyboard.up('s');
  await page.locator('[data-exam="retry"]:visible').click();expect((await pos(page))[2]).toBe(9.5);
- await page.keyboard.down('w');await page.waitForTimeout(500);await page.keyboard.up('w');await page.keyboard.down('s');await expect(page.locator('.result-reason')).toHaveText('中途停车，考试不合格');await page.keyboard.up('s');
+ await page.keyboard.down('w');await page.waitForTimeout(500);await page.keyboard.up('w');await page.keyboard.down('Space');await expect(page.locator('.result-reason')).toHaveText('中途停车，考试不合格');await page.keyboard.up('Space');
  await page.locator('[data-exam="retry"]:visible').click();await page.keyboard.down('w');await page.waitForTimeout(500);await page.locator('[data-exam="pause"]:visible').click();await page.keyboard.up('w');const frozen=await pos(page);await page.waitForTimeout(350);expect(await pos(page)).toEqual(frozen);
  await page.locator('[data-exam="resume"]').click();await page.keyboard.down('w');await expect(page.locator('.result-reason')).toHaveText('车辆越出边界线',{timeout:15000});await page.keyboard.up('w');await page.screenshot({path:'artifacts/s-fail-boundary.png'});
  await page.locator('[data-exam="exit"]:visible').click();const memory=[];
@@ -44,8 +44,8 @@ test('complete actual driving pass using only held keyboard and screen steering'
 test('three failure reasons, keyboard gears, pause, help and explicit resume',async({page})=>{
  await open(page);await start(page);
  for(const [key,gear] of [['z','R'],['x','N'],['c','D']]){await page.keyboard.press(key);expect(await page.evaluate(()=>window.larria.physics.gear)).toBe(gear);}
- await page.keyboard.press('z');await page.keyboard.down('w');await expect(page.locator('.result-reason')).toHaveText('中途倒车，考试不合格');await page.keyboard.up('w');await page.screenshot({path:'artifacts/exam-fail-reverse.png'});
- await page.locator('[data-exam="retry"]:visible').click();await page.keyboard.down('w');await page.waitForTimeout(500);await page.keyboard.up('w');await page.keyboard.down('s');await expect(page.locator('.result-reason')).toHaveText('中途停车，考试不合格');await page.keyboard.up('s');
+ await page.keyboard.press('z');await page.keyboard.down('s');await expect(page.locator('.result-reason')).toHaveText('中途倒车，考试不合格');await page.keyboard.up('s');await page.screenshot({path:'artifacts/exam-fail-reverse.png'});
+ await page.locator('[data-exam="retry"]:visible').click();await page.keyboard.down('w');await page.waitForTimeout(500);await page.keyboard.up('w');await page.keyboard.down('Space');await expect(page.locator('.result-reason')).toHaveText('中途停车，考试不合格');await page.keyboard.up('Space');
  await page.locator('[data-exam="retry"]:visible').click();await page.keyboard.down('w');await page.waitForTimeout(600);await page.locator('#help').click();await page.keyboard.up('w');expect(await state(page)).toBe('paused');const frozen=await pos(page);await page.waitForTimeout(400);expect(await pos(page)).toEqual(frozen);await page.locator('#help-dialog .close-dialog').click();expect(await state(page)).toBe('paused');await page.screenshot({path:'artifacts/exam-paused.png'});
  await page.locator('[data-exam="resume"]').click();await page.keyboard.down('w');await expect(page.locator('.result-reason')).toHaveText('车辆越出边界线',{timeout:15000});await page.keyboard.up('w');await page.screenshot({path:'artifacts/exam-fail-boundary.png'});
  await page.locator('[data-exam="retry"]:visible').click();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));expect(await state(page)).toBe('paused');await page.waitForTimeout(150);await page.locator('[data-exam="resume"]').click();expect(await state(page)).toBe('running');
@@ -158,13 +158,13 @@ test('free practice drives forward, stops and reverses without scoring; switchin
  await expect(page.locator('#exam-hud [data-parking]')).toHaveCount(0);
  const startZ=(await pos(page))[2];await page.keyboard.down('w');
  await expect.poll(async()=>(await pos(page))[2]).toBeLessThan(startZ-.6);
- await page.keyboard.up('w');await page.keyboard.down('s');
+ await page.keyboard.up('w');await page.keyboard.down('Space');
  await expect.poll(async()=>Math.abs(await page.evaluate(()=>window.larria.physics.speed))).toBeLessThan(.1);
- await page.keyboard.up('s');await page.keyboard.press('z');
+ await page.keyboard.up('Space');await page.keyboard.press('z');
  await expect.poll(async()=>page.evaluate(()=>window.larria.physics.gear)).toBe('R');
- const reverseZ=(await pos(page))[2];await page.keyboard.down('w');
+ const reverseZ=(await pos(page))[2];await page.keyboard.down('s');
  await expect.poll(async()=>(await pos(page))[2]).toBeGreaterThan(reverseZ+.4);
- await page.keyboard.up('w');expect(await page.evaluate(()=>window.larria.session.result)).toBeNull();
+ await page.keyboard.up('s');expect(await page.evaluate(()=>window.larria.session.result)).toBeNull();
  await page.screenshot({path:'artifacts/practice-driving.png'});
  await page.locator('[data-exam="pause"]:visible').click();const frozen=await pos(page);
  await page.waitForTimeout(250);expect(await pos(page)).toEqual(frozen);

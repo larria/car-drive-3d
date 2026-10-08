@@ -37,6 +37,21 @@ body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
 .practice-map span:last-child{font-size:9px}
 #toast.show{pointer-events:auto;cursor:url('./assets/cursors/click.svg') 3 2,pointer}
 #toast{border:1px solid #a4bba645;text-align:left;max-width:min(420px,90vw);white-space:normal;line-height:1.5;box-shadow:0 8px 28px #1c352440}
+.project-settings{margin-top:12px;min-height:40px;padding:10px 16px}
+#settings-dialog{width:min(560px,94vw);max-height:90vh;overflow:auto;z-index:40}
+#settings-dialog h2{margin:15px 0 3px}
+#settings-dialog>p{font-size:11px;line-height:1.8}
+.setting-row{display:flex;justify-content:space-between;align-items:center;gap:20px;border-top:1px solid #d3ddcf;padding:16px 0;font-size:12px}
+.setting-row strong{display:block;font-weight:600}
+.setting-row small{display:block;line-height:1.7;margin-top:5px;max-width:370px}
+.setting-row input[type="checkbox"]{width:21px;height:21px;flex:0 0 auto;accent-color:#355343;cursor:pointer}
+.setting-row select{font:inherit;padding:9px;border:1px solid #b9c8b5;border-radius:6px;background:#f8f9f2;max-width:145px}
+#settings-dialog .settings-warning{border-top:1px solid #d3ddcf;padding-top:15px;font-size:10px;color:#556a57}
+#exam-hud .exam-actions{flex-wrap:wrap;justify-content:flex-end}
+.practice-panel .practice-map{aspect-ratio:1.15;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;align-items:center;justify-content:center;position:relative;gap:13px;background:#596c60;padding:22px;color:#eff4eb}
+.practice-map span{display:grid;place-items:center;text-align:center;border:2px solid #cedbd0;border-radius:10px;font-size:11px!important;min-height:58px;background:#718772}
+.practice-map b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#e1e9dc;color:#34523e;border-radius:20px;padding:6px 10px;white-space:nowrap;font-size:10px}
+@media(max-width:780px){#exam-hud{gap:4px}#exam-hud .exam-actions{max-width:192px}#exam-hud .exam-actions button{min-height:32px;padding:5px 7px;font-size:10px}.result-card .exam-bottom-actions{flex-wrap:wrap}#settings-dialog{padding:22px}.setting-row{gap:10px}.setting-row small{font-size:9px}.practice-map span{min-height:48px;font-size:9px!important}}
 #pwa-dialog{padding:30px;max-width:min(440px,90vw)}
 #pwa-dialog[open]{display:flex;flex-direction:column;align-items:flex-start;gap:17px}
 #pwa-dialog h2,#pwa-dialog p{margin:0}
