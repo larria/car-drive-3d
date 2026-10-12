@@ -12,7 +12,8 @@ export function createWorld(scene: THREE.Scene) {
   world.name = 'LARRIA · Drive Lab';
   scene.add(world);
   scene.background = new THREE.Color('#e7e5df');
-  scene.fog = new THREE.Fog('#e7e5df', 85, 245);
+  // Keep the whole campus legible from the 145m overview; haze belongs beyond it.
+  scene.fog = new THREE.Fog('#e7e5df', 180, 340);
 
   let seed = 418;
   const random = () => {

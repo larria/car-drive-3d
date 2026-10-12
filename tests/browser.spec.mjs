@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {writeFileSync,readFileSync} from 'node:fs';
 const version=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
-const open=async page=>{await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);await page.locator('[data-exam="settings"]:visible').click();for(const id of ['right-angle','s-curve','parallel-parking','reverse-garage']){const input=page.locator(`[data-speed-course="${id}"]`);await input.fill('17');await input.dispatchEvent('change');}await page.locator('#settings-dialog .close-dialog').click();};
+const open=async page=>{await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);await page.locator('[data-exam="settings"]:visible').click();for(const id of ['right-angle','s-curve','parallel-parking','reverse-garage']){const input=page.locator(`[data-speed-course="${id}"]`);await input.evaluate(el=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'17');el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));});}await page.locator('#settings-dialog .close-dialog').click();};
 const start=async page=>{await page.locator('[data-exam="select"]').click();await page.locator('[data-exam="start"]').click();};
 const startS=async page=>{await page.locator('[data-exam="select:s-curve"]').click();await page.locator('[data-exam="start"]').click();};
 const state=page=>page.evaluate(()=>window.larria.session.state);
@@ -196,7 +196,7 @@ test('briefing actions remain above fold on short phone and desktop, and cursor 
  expect(await page.locator('.briefing-top-actions [data-exam="start"]').evaluate(el=>el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(550);
  await page.locator('[data-exam="start"]').click();
  expect(await page.locator('#steering-pad').evaluate(el=>getComputedStyle(el).cursor)).toContain('12 14, ew-resize');
- expect(await page.locator('#exam-hud [data-exam="pause"]').evaluate(el=>getComputedStyle(el).cursor)).toContain('3 2, pointer');
+ expect(await page.locator('#exam-hud [data-exam="pause"]').evaluate(el=>getComputedStyle(el).cursor)).toContain('9 2, pointer');
  await page.evaluate(()=>document.querySelector('#exam-hud [data-exam="pause"]').disabled=true);
  expect(await page.locator('#exam-hud [data-exam="pause"]').evaluate(el=>getComputedStyle(el).cursor)).toBe('not-allowed');
 });

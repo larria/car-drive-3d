@@ -4,9 +4,15 @@ import {createSettingsStore, DEFAULT_SETTINGS, SETTINGS_KEY, validateSettings} f
 describe('versioned local preferences',()=>{
  it('validates per-course speed ranges and old fields independently',()=>{
   const value=validateSettings({version:1,maxSpeeds:{'right-angle':0,'s-curve':90,practice:90,'parallel-parking':NaN}});
-  expect(value.maxSpeeds).toEqual({'right-angle':1,'s-curve':20,'parallel-parking':2,'reverse-garage':2,practice:60});
+  expect(value.maxSpeeds).toEqual({'right-angle':3,'s-curve':20,'parallel-parking':6,'reverse-garage':3,practice:60});
   expect(validateSettings({version:1}).maxSpeeds).toEqual(DEFAULT_SETTINGS.maxSpeeds);
   const store=createSettingsStore({getItem:()=>null,setItem:()=>{}});store.get().maxSpeeds.practice=50;expect(store.get().maxSpeeds.practice).toBe(15);
+ });
+ it('migrates every stored speed below the shared minimum without replacing valid speeds',()=>{
+  const maxSpeeds={'right-angle':2,'s-curve':-5,'parallel-parking':2.9,'reverse-garage':2,practice:1};
+  const store=createSettingsStore({getItem:()=>JSON.stringify({version:1,maxSpeeds}),setItem:()=>{}});
+  expect(Object.values(store.get().maxSpeeds)).toEqual([3,3,3,3,3]);
+  expect(validateSettings({version:1,maxSpeeds:{practice:50,'right-angle':8}}).maxSpeeds).toMatchObject({practice:50,'right-angle':8});
  });
  it('defaults to game controls and rejects unknown schema or values field by field',()=>{
   expect(validateSettings(null)).toEqual(DEFAULT_SETTINGS);

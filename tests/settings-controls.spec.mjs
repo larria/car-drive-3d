@@ -87,11 +87,48 @@ test('practice overview contains four translated unchanged visual course groups,
  await page.screenshot({path:'artifacts/settings-dialog-mobile.png'});
 });
 
+test('far orbit recovers depth precision and switching back preserves cockpit near detail',async({page})=>{
+ await open(page);await startPractice(page);await page.locator('[data-view="orbit"]').click();
+ await page.locator('#viewport canvas').hover({position:{x:850,y:450}});await page.mouse.wheel(0,6000);
+ await expect.poll(()=>page.evaluate(()=>window.larria.camera.near)).toBe(1);
+ await page.screenshot({path:'artifacts/orbit-depth-regression.png'});
+ await page.locator('[data-view="cockpit"]').click();await expect.poll(()=>page.evaluate(()=>window.larria.camera.near)).toBe(.04);
+ expect(await page.evaluate(()=>window.larria.mirrors.entries.every(e=>e.camera.near===.05))).toBe(true);
+});
+
+test('speed sliders drag live, persist on input, retain focus and keep mobile header reachable',async({page})=>{
+ await open(page);await page.locator('.project-settings').click();
+ const slider=page.locator('[data-speed-course="right-angle"]');await slider.scrollIntoViewIfNeeded();
+ const box=await slider.boundingBox();await page.mouse.move(box.x+10+(box.width-20)*3/17,box.y+box.height/2);await page.mouse.down();
+ await page.mouse.move(box.x+10+(box.width-20)*10/17,box.y+box.height/2,{steps:12});
+ await expect(slider.locator('..').locator('output')).toHaveText('13 km/h');
+ expect(await page.evaluate(()=>window.larria.settingsStore.get().maxSpeeds['right-angle'])).toBe(13);
+ await expect(slider).toBeFocused();await page.screenshot({path:'artifacts/settings-slider-drag-desktop.png'});await page.mouse.up();
+ await slider.press('End');await expect(slider).toHaveValue('20');await slider.press('Home');await expect(slider).toHaveValue('3');await slider.press('ArrowRight');
+ await page.locator('#settings-dialog .close-dialog').click();await page.reload();await page.waitForFunction(()=>window.larria?.ready);
+ await page.locator('.project-settings').click();await expect(slider).toHaveValue('4');await expect(slider.locator('..').locator('output')).toHaveText('4 km/h');
+ await page.setViewportSize({width:390,height:600});await page.locator('.settings-body').evaluate(e=>e.scrollTop=e.scrollHeight);
+ const header=await page.locator('.settings-header').boundingBox(),close=await page.locator('#settings-dialog .close-dialog').boundingBox();
+ expect(header.y).toBeGreaterThanOrEqual(0);expect(close.width).toBe(44);expect(close.height).toBe(44);
+ await expect(page.locator('[data-speed-course="practice"]')).toHaveAttribute('max','60');
+ await page.screenshot({path:'artifacts/settings-slider-mobile-bottom.png'});
+ await page.locator('#settings-dialog .close-dialog').click();await expect(page.locator('#settings-dialog')).not.toBeVisible();
+});
+
+test('shared speed bounds and settings header stay usable after scrolling on mobile',async({page})=>{
+ await open(page);await page.setViewportSize({width:390,height:600});await page.locator('.project-settings').click();
+ for(const input of await page.locator('[data-speed-course]').all())expect(await input.getAttribute('min')).toBe('3');
+ await expect(page.locator('#settings-description')).toContainText('无需点击保存');
+ const body=page.locator('.settings-body');await body.evaluate(e=>e.scrollTop=e.scrollHeight);
+ const close=page.locator('#settings-dialog .close-dialog');const box=await close.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThan(600);
+ await close.click();await expect(page.locator('#settings-dialog')).not.toBeVisible();
+});
+
  test('default exam ceiling, persisted course limits and protected restart shortcut',async({page})=>{
   await open(page);await page.locator('[data-exam="select"]').click();await page.locator('[data-exam="start"]').click();
-  await page.keyboard.down('w');await page.waitForTimeout(3000);expect((await snapshot(page)).speed*3.6).toBeGreaterThan(1.8);expect((await snapshot(page)).speed*3.6).toBeLessThan(2.05);await page.keyboard.up('w');
+  await page.keyboard.down('w');await page.waitForTimeout(3000);expect((await snapshot(page)).speed*3.6).toBeGreaterThan(5.8);expect((await snapshot(page)).speed*3.6).toBeLessThan(6.05);await page.keyboard.up('w');
   await page.keyboard.press('Escape');await page.locator('[data-exam="resume"]:visible').focus();await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('running');expect((await snapshot(page)).z).toBe(9);
-  await page.locator('#settings-running').click();const input=page.locator('[data-speed-course="right-angle"]');await input.fill('8');await input.dispatchEvent('change');await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('paused');await page.locator('#settings-dialog .close-dialog').click();await page.locator('[data-exam="resume"]:visible').focus();await page.keyboard.press('r');
+  await page.locator('#settings-running').click();const input=page.locator('[data-speed-course="right-angle"]');await input.focus();await page.keyboard.press('Home');for(let i=0;i<5;i++)await page.keyboard.press('ArrowRight');await expect(input.locator('..').locator('output')).toHaveText('8 km/h');await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('paused');await page.locator('#settings-dialog .close-dialog').click();await page.locator('[data-exam="resume"]:visible').focus();await page.keyboard.press('r');
   await page.keyboard.down('s');await expect.poll(async()=>(await snapshot(page)).state).toBe('result');await page.keyboard.up('s');await page.locator('[data-exam="retry"]:visible').focus();await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('running');
   await page.reload();await page.waitForFunction(()=>window.larria?.ready);expect(await input.inputValue()).toBe('8');expect(await page.locator('[data-speed-course="practice"]').inputValue()).toBe('15');
  });

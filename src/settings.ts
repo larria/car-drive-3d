@@ -6,7 +6,9 @@ export const PAINTS = [
   { color: '#d6ad50', name: '香槟金' },
 ] as const;
 
-export const SPEED_DEFAULTS = { 'right-angle': 2, 's-curve': 2, 'parallel-parking': 2, 'reverse-garage': 2, practice: 15 };
+export const SPEED_DEFAULTS = { 'right-angle': 6, 's-curve': 6, 'parallel-parking': 6, 'reverse-garage': 3, practice: 15 };
+export const SPEED_MIN = 3;
+export const speedMax = (course: SpeedCourse) => course === 'practice' ? 60 : 20;
 export type SpeedCourse = keyof typeof SPEED_DEFAULTS;
 export interface Settings {
   maxSpeeds: Record<SpeedCourse, number>;
@@ -41,7 +43,7 @@ export function validateSettings(value: unknown): Settings {
   if (speeds && typeof speeds === 'object' && !Array.isArray(speeds)) {
     for (const key of Object.keys(SPEED_DEFAULTS) as SpeedCourse[]) {
       const speed = speeds[key];
-      if (typeof speed === 'number' && Number.isFinite(speed)) result.maxSpeeds[key] = Math.max(1, Math.min(key === 'practice' ? 60 : 20, speed));
+      if (typeof speed === 'number' && Number.isFinite(speed)) result.maxSpeeds[key] = Math.max(SPEED_MIN, Math.min(speedMax(key), speed));
     }
   }
   return result;
