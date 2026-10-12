@@ -81,8 +81,8 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   expect(r.step({...finish,x:11.1,speed:-.001})).toBeNull();
   expect(r.step({...finish,x:11.1,speed:0})).toBeNull();
   r.step({...finish,x:6,speed:0});expect(r.step({...finish,x:11.1,speed:0})?.passed).toBe(true);
-  r.reset();expect(r.step({...finish,speed:0})).toBeNull();
-  expect(r.step({...finish,x:11.1,speed:0})?.reason).toContain('两次入库');
+  r.reset();expect(r.step({...finish,x:6,speed:0})).toBeNull();
+  expect(r.step({...finish,x:8,speed:1})?.reason).toContain('两次入库');
  });
  it('stops on cumulative outside 2s, not 2s of one continuous stop',()=>{
   const r=new ExamRules(parallel),p=startParallel();r.step({...p,throttle:true});
@@ -97,14 +97,14 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   expect(r.step({...p,speed:1})?.reason).toContain('30 秒');
   r.reset();r.reversed=true;expect(r.step({...p,speed:1})?.reason).toContain('倒车后');
   r.reset();r.outsideStopped=2-1/60;r.startedW=true;expect(r.step(p)?.reason).toContain('停车超 2 秒');
-  r.reset();expect(r.step({...p,x:parallel.parkZone.maxX,z:0,speed:1})).toBeNull();expect(r.score).toBe(90);
+  r.reset();expect(r.step({...p,x:parallel.parkZone.maxX,z:0,speed:1})?.reason).toContain('前轮越出');expect(r.score).toBe(0);
  });
  it('prioritizes short parking bay corners and fails finish without required parking',()=>{
   const r=new ExamRules(parallel);
   expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.minZ}))?.reason).toContain('前车');
   r.reset();expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.maxZ}))?.reason).toContain('后车');
-  r.reset();expect(r.step(pose({x:0,z:parallel.finish[0].z}))).toBeNull();
-  expect(r.step(pose({x:0,z:parallel.finish[0].z-VEHICLE.length/2-.01}))?.reason).toContain('未完成侧方入库');
+  r.reset();expect(r.step(pose({x:0,z:parallel.finish[0].z+3}))).toBeNull();
+  expect(r.step(pose({x:0,z:parallel.finish[0].z-VEHICLE.length/2-.01,speed:1}))?.reason).toContain('未完成侧方入库');
  });
  it('cleans counters, phases, timers and course ownership on four-course switching',async()=>{
   const {COURSES}=await import('../src/courses');const s=new ExamSession();for(const c of [...COURSES,...COURSES]){

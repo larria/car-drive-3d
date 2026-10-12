@@ -1,7 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {writeFileSync,readFileSync} from 'node:fs';
 const version=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
-const open=async page=>{await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);};
+const open=async page=>{await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);await page.locator('[data-exam="settings"]:visible').click();for(const id of ['right-angle','s-curve','parallel-parking','reverse-garage']){const input=page.locator(`[data-speed-course="${id}"]`);await input.fill('17');await input.dispatchEvent('change');}await page.locator('#settings-dialog .close-dialog').click();};
 const start=async page=>{await page.locator('[data-exam="select"]').click();await page.locator('[data-exam="start"]').click();};
 const startS=async page=>{await page.locator('[data-exam="select:s-curve"]').click();await page.locator('[data-exam="start"]').click();};
 const state=page=>page.evaluate(()=>window.larria.session.state);
@@ -241,7 +241,7 @@ test('result inspection preserves frozen scene and permits only observation',asy
   expect(await page.evaluate(()=>window.larria.look.pitch)).toBeLessThan(-.1);
   await page.locator('button[data-view="follow"]').click();
   await page.mouse.move(710,470);await page.mouse.down();await page.mouse.move(710,360,{steps:6});await page.mouse.up();
-  const offset=await page.evaluate(()=>window.larria.look.followPitch);expect(offset).toBeGreaterThan(.1);
+  const offset=await page.evaluate(()=>window.larria.look.followPitch);expect(offset).toBeLessThan(-.1);
   await page.waitForTimeout(400);expect(await page.evaluate(()=>window.larria.look.followPitch)).toBe(offset);
   await page.locator('#look-center').click();expect(await page.evaluate(()=>window.larria.look.followPitch)).toBe(0);
   await page.mouse.move(710,430);await page.mouse.down();await page.mouse.move(710,-800,{steps:4});await page.mouse.up();
@@ -249,6 +249,6 @@ test('result inspection preserves frozen scene and permits only observation',asy
   await page.keyboard.down('s');await expect.poll(()=>state(page)).toBe('result');await page.keyboard.up('s');
   const frozen=await pos(page);await page.locator('#look-center').click();
   await page.mouse.move(710,430);await page.mouse.down();await page.mouse.move(710,350,{steps:4});await page.mouse.up();
-  expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeGreaterThan(.1);expect(await pos(page)).toEqual(frozen);
+  expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeLessThan(-.1);expect(await pos(page)).toEqual(frozen);
   await expect(page.locator('.result-score')).toContainText('0');await expect(page.locator('.deduction-list')).toContainText('100');
  });

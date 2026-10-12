@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test';
 
-async function open(page){await page.goto('http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(500);}
+async function open(page){await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(500);}
 async function startPractice(page){await page.locator('[data-exam="select:practice"]').click();await page.locator('[data-exam="start"]').click();}
 const snapshot=page=>page.evaluate(()=>{const l=window.larria,p=l.physics;return{speed:p.speed,gear:p.gear,z:p.chassis.position.z,throttle:p.throttle,brake:p.brake,state:l.session.state,result:l.session.result};});
 
@@ -86,3 +86,12 @@ test('practice overview contains four translated unchanged visual course groups,
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(390);
  await page.screenshot({path:'artifacts/settings-dialog-mobile.png'});
 });
+
+ test('default exam ceiling, persisted course limits and protected restart shortcut',async({page})=>{
+  await open(page);await page.locator('[data-exam="select"]').click();await page.locator('[data-exam="start"]').click();
+  await page.keyboard.down('w');await page.waitForTimeout(3000);expect((await snapshot(page)).speed*3.6).toBeGreaterThan(1.8);expect((await snapshot(page)).speed*3.6).toBeLessThan(2.05);await page.keyboard.up('w');
+  await page.keyboard.press('Escape');await page.locator('[data-exam="resume"]:visible').focus();await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('running');expect((await snapshot(page)).z).toBe(9);
+  await page.locator('#settings-running').click();const input=page.locator('[data-speed-course="right-angle"]');await input.fill('8');await input.dispatchEvent('change');await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('paused');await page.locator('#settings-dialog .close-dialog').click();await page.locator('[data-exam="resume"]:visible').focus();await page.keyboard.press('r');
+  await page.keyboard.down('s');await expect.poll(async()=>(await snapshot(page)).state).toBe('result');await page.keyboard.up('s');await page.locator('[data-exam="retry"]:visible').focus();await page.keyboard.press('r');expect((await snapshot(page)).state).toBe('running');
+  await page.reload();await page.waitForFunction(()=>window.larria?.ready);expect(await input.inputValue()).toBe('8');expect(await page.locator('[data-speed-course="practice"]').inputValue()).toBe('15');
+ });

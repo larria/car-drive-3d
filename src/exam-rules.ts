@@ -60,6 +60,7 @@ export class ExamRules {
   dirPhaseStarted=false;
   private previousPose: ExamPose | null = null;
   private crossedFinishOutward = false;
+  private prematureFinish = false;
   private result(passed:boolean,reason:string): ExamResult { return {passed,reason,score:this.score,deductions:this.deductions.map(d=>({...d}))}; }
   private deduct(points:number,reason:string): ExamResult | null {
     this.score=Math.max(0,this.score-points);this.deductions.push({points,reason,elapsed:this.totalElapsed});
@@ -67,7 +68,8 @@ export class ExamRules {
   }
   private fail(reason:string): ExamResult { this.deduct(100,reason);return this.result(false,reason); }
   get phaseLabel(){return phases[this.dirPhase];}
-  private finished(p: ExamPose, corners: Point[]): boolean {
+  private finished(p: ExamPose, corners: Point[], premature = false): boolean {
+    if(this.prematureFinish!==premature){this.crossedFinishOutward=false;this.previousPose=null;this.prematureFinish=premature;}
     const { finish: [a,b], finishExitNormal: n } = this.course;
     const distance=(q:Point)=>(q.x-a.x)*n.x+(q.z-a.z)*n.z;
     const epsilon=1e-7,dx=b.x-a.x,dz=b.z-a.z,lengthSquared=dx*dx+dz*dz;
@@ -75,7 +77,8 @@ export class ExamRules {
       const along=((q.x-a.x)*dx+(q.z-a.z)*dz)/lengthSquared;
       return along>=0&&along<=1;
     };
-    const allowed=this.course.id!=='reverse-garage'||p.speed>=0;
+    const allowed=premature ? p.speed>PARK_DIRECTION_EPS : this.course.id!=='reverse-garage'||p.speed>=0;
+    const tires=(pose:ExamPose)=>wheelPolygons(pose).slice(premature?0:2,premature?2:4).flat();
     const previous=this.previousPose;
     this.previousPose={...p};
     if(previous&&allowed){
@@ -83,10 +86,10 @@ export class ExamRules {
       // Bound both translation and corner arc travel; never interpolate the long yaw path.
       const radius=Math.hypot(VEHICLE.width/2,VEHICLE.length/2);
       const steps=Math.max(1,Math.ceil((Math.hypot(p.x-previous.x,p.z-previous.z)+radius*Math.abs(yawDelta))/.02));
-      let beforeCorners=wheelPolygons(previous).slice(2).flat();
+      let beforeCorners=tires(previous);
       for(let step=1;step<=steps;step++){
         const t=step/steps;
-        const current=wheelPolygons({...p,x:previous.x+(p.x-previous.x)*t,z:previous.z+(p.z-previous.z)*t,yaw:previous.yaw+yawDelta*t}).slice(2).flat();
+        const current=tires({...p,x:previous.x+(p.x-previous.x)*t,z:previous.z+(p.z-previous.z)*t,yaw:previous.yaw+yawDelta*t,steering:(previous.steering??0)+((p.steering??0)-(previous.steering??0))*t});
         if(current.every(q=>distance(q)<=epsilon))this.crossedFinishOutward=false;
         for(let i=0;i<8;i++){
           const from=beforeCorners[i],to=current[i],before=distance(from),after=distance(to);
@@ -118,16 +121,16 @@ export class ExamRules {
         beforeCorners=current;
       }
     }
-    corners=wheelPolygons(p).slice(2).flat();
+    corners=tires(p);
     if(corners.every(q=>distance(q)<=epsilon))this.crossedFinishOutward=false;
-    return allowed&&this.crossedFinishOutward&&corners.every(q=>distance(q)>epsilon);
+    return allowed&&this.crossedFinishOutward&&(premature||corners.every(q=>distance(q)>epsilon));
   }
   reset(){
     this.score=100;this.deductions=[];this.bodyContact=false;this.wheelContact=false;this.parkingAttempt=false;this.boundaryPose=null;
     this.startedW=false;this.totalElapsed=0;this.outsideStopped=0;
     this.parkCount=0;this.parked=false;this.reversed=false;this.forwardAfterParked=false;
     this.dirPhase=0;this.dirPhaseStarted=false;
-    this.previousPose=null;this.crossedFinishOutward=false;
+    this.previousPose=null;this.crossedFinishOutward=false;this.prematureFinish=false;
   }
   step(p: ExamPose, dt=1/60): ExamResult | null {
     if(p.throttle)this.startedW=true;
@@ -185,6 +188,10 @@ export class ExamRules {
         const outside=samples.some(q=>{const body=bodyCorners(q);return body.some(c=>!legal(c))||course.boundaries.some(line=>body.some((a,i)=>intersects(a,body[(i+1)%4],...line)));});
         if(outside)return this.fail('车身越出道路或车库边界，考试不合格');
       }else{
+        // Only a tire that truly leaves the road/bay union is an exit; touching
+        // a marking retains its 10-point penalty and the bay mouth stays open.
+        const legalTire=(w:Point[])=>w.some(c=>course.roads.some(road=>contains(road,c)));
+        if(forward&&samples.some(q=>wheelPolygons(q).slice(0,2).some((w,i)=>!legalTire(w)&&(!previous||legalTire(wheelPolygons(previous)[i])))))return this.fail('前轮越出场地，考试不合格');
         const obstacles=course.penaltyLines.filter(l=>l.kind==='obstacle');
         for(const line of obstacles)if(samples.some(q=>touches(bodyCorners(q),line.segment)))return this.fail(line.reason);
         const edges=course.penaltyLines.filter(l=>l.kind==='marking').map(l=>l.segment);
@@ -213,7 +220,7 @@ export class ExamRules {
       if(valid&&!this.parked){this.parked=true;this.parkCount++;}
       else if(!valid&&this.parked)this.parked=false;
       // Garage finish ignores actual negative speed, including the tiny reverse deadband.
-      if(this.finished(p,corners))
+      if(this.finished(p,corners,this.parkCount<course.requiredParks))
         return this.parkCount>=course.requiredParks?this.result(true,course.passReason):this.fail(course.notParkedReason);
       return null;
     }

@@ -10,6 +10,11 @@ const pose=(x:number,z=0,yaw=-Math.PI/2):ExamPose=>({x,z,yaw,speed:1,throttle:fa
 // Model-matched rear wheel center 1.495m behind the origin, radius .35m.
 const rearClearance=1.495+.35;
 describe('finite outward rear-wheel finish traversal',()=>{
+ it('clears front-wheel evidence when required parks switch finish to rear wheels',()=>{
+  const parking={...PARALLEL_PARKING,finish:course.finish,finishExitNormal:course.finishExitNormal,penaltyLines:[],roads:[[{x:-20,z:-20},{x:20,z:-20},{x:20,z:20},{x:-20,z:20}]]};
+  const r=new ExamRules(parking);expect(r.step(pose(-3))).toBeNull();expect(r.step(pose(-1))?.passed).toBe(false);
+  r.parkCount=1;expect(r.step(pose(3))).toBeNull();expect(r.step(pose(-3))).toBeNull();expect(r.step(pose(3))?.passed).toBe(true);
+ });
  it('declares explicit exit normals for all four courses',()=>{
   expect(RIGHT_ANGLE.finishExitNormal).toEqual({x:1,z:0});
   expect(REVERSE_GARAGE.finishExitNormal).toEqual({x:1,z:0});

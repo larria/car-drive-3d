@@ -6,7 +6,10 @@ export const PAINTS = [
   { color: '#d6ad50', name: '香槟金' },
 ] as const;
 
+export const SPEED_DEFAULTS = { 'right-angle': 2, 's-curve': 2, 'parallel-parking': 2, 'reverse-garage': 2, practice: 15 };
+export type SpeedCourse = keyof typeof SPEED_DEFAULTS;
 export interface Settings {
+  maxSpeeds: Record<SpeedCourse, number>;
   realisticControls: boolean;
   paint: string;
   headlights: boolean;
@@ -14,6 +17,7 @@ export interface Settings {
   mirrorsExpanded: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
+  maxSpeeds: SPEED_DEFAULTS,
   realisticControls: false,
   paint: PAINTS[0].color,
   headlights: false,
@@ -24,7 +28,7 @@ export const SETTINGS_KEY = 'larria.settings.v1';
 
 /** Only recognized fields and values survive; never persist vehicle or exam state. */
 export function validateSettings(value: unknown): Settings {
-  const result = { ...DEFAULT_SETTINGS };
+  const result = { ...DEFAULT_SETTINGS, maxSpeeds: { ...SPEED_DEFAULTS } };
   if (!value || typeof value !== 'object' || Array.isArray(value)) return result;
   const record = value as Record<string, unknown>;
   if (record.version !== 1) return result;
@@ -33,25 +37,32 @@ export function validateSettings(value: unknown): Settings {
   if (typeof record.headlights === 'boolean') result.headlights = record.headlights;
   if (record.quality === 'high' || record.quality === 'smooth') result.quality = record.quality;
   if (typeof record.mirrorsExpanded === 'boolean') result.mirrorsExpanded = record.mirrorsExpanded;
+  const speeds = record.maxSpeeds as Record<string, unknown> | undefined;
+  if (speeds && typeof speeds === 'object' && !Array.isArray(speeds)) {
+    for (const key of Object.keys(SPEED_DEFAULTS) as SpeedCourse[]) {
+      const speed = speeds[key];
+      if (typeof speed === 'number' && Number.isFinite(speed)) result.maxSpeeds[key] = Math.max(1, Math.min(key === 'practice' ? 60 : 20, speed));
+    }
+  }
   return result;
 }
 
 export function createSettingsStore(storage?: Pick<Storage, 'getItem' | 'setItem'>) {
-  let current = { ...DEFAULT_SETTINGS };
+  let current = validateSettings({version: 1});
   try {
     const source = storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
     const raw = source?.getItem(SETTINGS_KEY);
     if (raw) current = validateSettings(JSON.parse(raw));
   } catch { /* Private browsing, denied storage, or corrupt JSON: use memory. */ }
   return {
-    get: (): Settings => ({ ...current }),
+    get: (): Settings => ({ ...current, maxSpeeds: { ...current.maxSpeeds } }),
     update(patch: Partial<Settings>): Settings {
       current = validateSettings({ ...current, ...patch, version: 1 });
       try {
         const target = storage ?? (typeof localStorage === 'undefined' ? undefined : localStorage);
         target?.setItem(SETTINGS_KEY, JSON.stringify({ version: 1, ...current }));
       } catch { /* Keep the new preference in memory even if writes fail. */ }
-      return { ...current };
+      return { ...current, maxSpeeds: { ...current.maxSpeeds } };
     },
   };
 }

@@ -81,7 +81,7 @@ export class CockpitLook {
   get locked() { return document.pointerLockElement === this.canvas; }
   private rotate(dx: number, dy: number) {
     if (this.follow()) {
-      this.followPitch = Math.max(-.18, Math.min(.8, this.followPitch - dy * .003));
+      this.followPitch = Math.max(-.18, Math.min(.8, this.followPitch + dy * .003));
       return;
     }
     this.yaw = Math.max(-Math.PI, Math.min(Math.PI, this.yaw - dx * .004));

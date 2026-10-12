@@ -2,6 +2,12 @@ import {describe, expect, it} from 'vitest';
 import {createSettingsStore, DEFAULT_SETTINGS, SETTINGS_KEY, validateSettings} from '../src/settings';
 
 describe('versioned local preferences',()=>{
+ it('validates per-course speed ranges and old fields independently',()=>{
+  const value=validateSettings({version:1,maxSpeeds:{'right-angle':0,'s-curve':90,practice:90,'parallel-parking':NaN}});
+  expect(value.maxSpeeds).toEqual({'right-angle':1,'s-curve':20,'parallel-parking':2,'reverse-garage':2,practice:60});
+  expect(validateSettings({version:1}).maxSpeeds).toEqual(DEFAULT_SETTINGS.maxSpeeds);
+  const store=createSettingsStore({getItem:()=>null,setItem:()=>{}});store.get().maxSpeeds.practice=50;expect(store.get().maxSpeeds.practice).toBe(15);
+ });
  it('defaults to game controls and rejects unknown schema or values field by field',()=>{
   expect(validateSettings(null)).toEqual(DEFAULT_SETTINGS);
   expect(validateSettings({version:2,realisticControls:true})).toEqual(DEFAULT_SETTINGS);

@@ -8,6 +8,11 @@ function run(car: DrivingPhysics, frames: number, input: DrivingInput = idle) {
 }
 
 describe('DrivingPhysics real fixed-step simulation', () => {
+  it('governs forward and reverse physical speed and brakes a lowered ceiling',()=>{
+    const car=new DrivingPhysics();car.maxSpeed=2/3.6;run(car,600,{throttle:1,brake:0,steer:0});expect(car.speed*3.6).toBeGreaterThan(1.8);expect(car.speed*3.6).toBeLessThanOrEqual(2.05);
+    run(car,120,{throttle:0,brake:1,steer:0});expect(Math.abs(car.speed)).toBeLessThan(.01);car.setGear('R');run(car,600,{throttle:1,brake:0,steer:0});expect(car.speed*3.6).toBeLessThan(-1.8);expect(Math.abs(car.speed)*3.6).toBeLessThanOrEqual(2.05);
+    car.maxSpeed=1/3.6;run(car,180,{throttle:1,brake:0,steer:0});expect(Math.abs(car.speed)*3.6).toBeLessThanOrEqual(1.05);
+  });
   it('has the required axes, geometry and real supporting suspension', () => {
     const car = new DrivingPhysics();
     expect(car.world).toBeInstanceOf(CANNON.World);

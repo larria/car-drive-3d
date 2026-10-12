@@ -17,6 +17,8 @@ export class DrivingPhysics {
   readonly world: CANNON.World;
   readonly chassis: CANNON.Body;
   readonly vehicle: CANNON.RaycastVehicle;
+  /** Physical speed governor, metres per second, in both directions. */
+  maxSpeed: number = VEHICLE.maxSpeed;
   speed = 0;
   steering = 0;
   gear: Gear = 'D';
@@ -152,9 +154,14 @@ export class DrivingPhysics {
     this.steering = clamp(input.steer, -1, 1) * VEHICLE.steeringLock /
       (1 + Math.abs(this.speed) * 0.065);
     const direction = this.gear === 'D' ? 1 : this.gear === 'R' ? -1 : 0;
-    const limit = VEHICLE.maxSpeed;
+    const limit = Math.max(1 / 3.6, this.maxSpeed);
+    const actualSpeed = Math.hypot(this.chassis.velocity.x, this.chassis.velocity.z);
+    // Cut torque near the ceiling and brake overspeed (including a lowered setting).
+    // Do not rewrite velocity: suspension and static brake hold remain intact.
+    const governorBrake = Math.min(1, Math.max(0, (actualSpeed - limit) * 2));
+    this.brake = Math.max(this.brake, governorBrake);
     const power = 2100 * this.throttle * (1 - this.brake) *
-      Math.max(0, 1 - Math.pow(Math.max(0, this.speed * direction) / limit, 4));
+      Math.max(0, Math.min(1, (limit - actualSpeed) / .15));
     for (let i = 0; i < 4; i++) {
       // Cannon uses up cross right = -Z: positive engine force drives forward.
       this.vehicle.applyEngineForce(i >= 2 ? direction * power : 0, i);
