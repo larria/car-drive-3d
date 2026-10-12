@@ -21,6 +21,7 @@ export class CockpitLook {
   private last: { x: number; y: number } | null = null;
   private touchId: number | null = null;
   private pendingLock = false;
+  private lockGeneration = 0;
   private ignoreNextEscape = false;
   private wasLocked = false;
   private unlockingProgrammatically = false;
@@ -60,6 +61,7 @@ export class CockpitLook {
       if (!this.locked && this.touchId === null && e.pointerType === 'mouse' && (e.target !== canvas || !this.canLook(e))) this.last = null;
     });
     document.addEventListener('pointerlockchange', () => {
+      if (this.locked && (!this.pendingLock || !this.enabled() || this.follow())) { this.unlock(); return; }
       const locked = this.locked;
       if (!locked && this.wasLocked && !this.unlockingProgrammatically) this.ignoreNextEscape = true;
       this.unlockingProgrammatically = false;
@@ -93,15 +95,20 @@ export class CockpitLook {
     if (!this.canvas.requestPointerLock) { this.feedback('当前浏览器不支持锁定环视，仍可移动鼠标转头'); return; }
     this.pendingLock = true;
     this.ignoreNextEscape = false;
+    const generation = ++this.lockGeneration;
     try {
       await this.canvas.requestPointerLock();
-      if (!this.locked) this.pendingLock = false;
+      if (generation !== this.lockGeneration || !this.enabled() || this.follow()) { if (this.locked) this.unlock(); return; }
+      // Legacy browsers return void before permission resolves. Only the
+      // pointerlockchange/error events settle pending ownership.
     } catch {
+      if (generation !== this.lockGeneration) return;
       this.pendingLock = false;
       this.feedback('浏览器未允许锁定环视，仍可移动鼠标转头');
     }
   }
   unlock() {
+    ++this.lockGeneration;
     this.pendingLock = false;
     this.ignoreNextEscape = false;
     this.resetPointer();

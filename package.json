@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run tests/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --config playwright.config.mjs",
+    "test:settings": "playwright test --config tests/settings-controls.config.mjs",
+    "test:pwa": "playwright test --config tests/pwa.config.mjs",
+    "test:browser:all": "npm run test:e2e && npm run test:settings && npm run test:pwa"
   },
   "dependencies": {
     "three": "^0.180.0",

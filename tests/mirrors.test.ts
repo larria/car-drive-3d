@@ -43,7 +43,7 @@ describe('model-bound mirrors',()=>{
     expect(mirrors.entries[0].camera.position.distanceTo(root.localToWorld(profile.mirrors[0].cameraPosition.clone()))).toBeLessThan(1e-6);
     expect(root.worldToLocal(root.localToWorld(eye.clone())).distanceTo(eye)).toBeLessThan(1e-6);
     expect(renderer.setRenderTarget).toHaveBeenLastCalledWith(null);expect(renderer.setScissorTest).toHaveBeenLastCalledWith(true);
-    mirrors.showSurfaces(false);mirrors.update(renderer as unknown as THREE.WebGLRenderer,scene);expect(renderer.render).toHaveBeenCalledTimes(2);expect(mirrors.entries[0].surface.visible).toBe(false);
+    mirrors.showSurfaces(false);renderer.render.mockClear();mirrors.update(renderer as unknown as THREE.WebGLRenderer,scene);expect(renderer.render).not.toHaveBeenCalled();expect(mirrors.entries[0].surface.visible).toBe(false);
     mirrors.dispose();expect(root.getObjectByName('mirror-surface-left')).toBeUndefined();
   });
   it('restores surface and renderer state when offscreen rendering throws',()=>{

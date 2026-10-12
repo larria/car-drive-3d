@@ -51,13 +51,17 @@ describe('finite outward rear-wheel finish traversal',()=>{
  });
  it('tracks actual rear wheel arcs during rotation without center translation',()=>{
   const r=new ExamRules(course);expect(r.step(pose(1.5,0,-Math.PI/2))).toBeNull();
-  expect(r.step(pose(1.5,0,0))?.passed).toBe(true);
+  expect(r.step(pose(1.5,0,-.1))?.passed).toBe(true);
  });
  it('uses the shortest yaw path across the angle wrap',()=>{
   const wrapped=new ExamRules(course),unwrapped=new ExamRules(course);
   wrapped.step(pose(-3,0,Math.PI-.1));unwrapped.step(pose(-3,0,Math.PI-.1));
   expect(wrapped.step(pose(3,0,-Math.PI+.1))).toEqual(unwrapped.step(pose(3,0,Math.PI+.1)));
   expect(wrapped.step(pose(3,0,-Math.PI+.1))?.passed).toBe(true);
+ });
+ it('rejects tiny reverse deadband rear-first traversal and wrong heading',()=>{
+  for(const speed of [-.001,0,1]){const r=new ExamRules({...course,rules:{...course.rules,noStopAfterGo:false}});r.step(pose(-4,0,Math.PI/2));expect(r.step({...pose(4,0,Math.PI/2),speed})).toBeNull();}
+  const r=new ExamRules({...course,rules:{...course.rules,noStopAfterGo:false}});r.step(pose(-4));expect(r.step({...pose(4),speed:-.001})).toBeNull();
  });
  it('rejects first samples beyond finish, inward motion and extension-only crossings',()=>{
   const r=new ExamRules(course);expect(r.step(pose(4))).toBeNull();expect(r.step(pose(-4))).toBeNull();

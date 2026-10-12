@@ -6,7 +6,7 @@ export const PAINTS = [
   { color: '#d6ad50', name: '香槟金' },
 ] as const;
 
-export const SPEED_DEFAULTS = { 'right-angle': 6, 's-curve': 6, 'parallel-parking': 6, 'reverse-garage': 3, practice: 15 };
+export const SPEED_DEFAULTS = { 'right-angle': 6, 's-curve': 6, 'parallel-parking': 6, 'reverse-garage': 6, practice: 15 };
 export const SPEED_MIN = 3;
 export const speedMax = (course: SpeedCourse) => course === 'practice' ? 60 : 20;
 export type SpeedCourse = keyof typeof SPEED_DEFAULTS;

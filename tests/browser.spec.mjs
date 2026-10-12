@@ -63,7 +63,7 @@ test('hover look, UI exclusion, mirrors and narrow screen controls',async({page}
 
 
 test('keyboard scope, repeated keys, focus and directional gear feedback',async({page})=>{
- await open(page);await start(page);
+ await open(page);await page.locator('[data-exam="select:practice"]').click();await page.locator('[data-exam="start"]').click();
  await page.evaluate(()=>{window.__keys=[];document.addEventListener('keydown',e=>window.__keys.push([e.code,e.defaultPrevented]),true);});
  await page.keyboard.down('w');await page.keyboard.down('a');await page.waitForTimeout(150);
  expect(await page.evaluate(()=>window.larria.physics.throttle)).toBe(1);
@@ -72,6 +72,7 @@ test('keyboard scope, repeated keys, focus and directional gear feedback',async(
  expect(await page.evaluate(()=>window.__keys.at(-1))).toEqual(['Space',false]); // capture phase is before preventDefault
  expect(await page.evaluate(()=>{let prevented=false;const e=new KeyboardEvent('keydown',{code:'ArrowDown',key:'ArrowDown',repeat:true,bubbles:true,cancelable:true});document.dispatchEvent(e);prevented=e.defaultPrevented;return prevented;})).toBe(true);
  await page.keyboard.up('a');await page.keyboard.up('w');
+ await page.keyboard.down('Space');await expect.poll(()=>page.evaluate(()=>Math.abs(window.larria.physics.speed))).toBeLessThan(.05);await page.keyboard.up('Space');
  await page.keyboard.press('Control+KeyZ');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('D');
  await page.locator('#help').focus();await page.keyboard.press('z');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('D');
  await page.evaluate(()=>document.activeElement.blur());await page.keyboard.press('z');expect(await page.evaluate(()=>window.larria.physics.gear)).toBe('R');
@@ -252,3 +253,37 @@ test('result inspection preserves frozen scene and permits only observation',asy
   expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeLessThan(-.1);expect(await pos(page)).toEqual(frozen);
   await expect(page.locator('.result-score')).toContainText('0');await expect(page.locator('.deduction-list')).toContainText('100');
  });
+
+
+test('UI activation releases held driving keys without swallowing brake; slider keyboard and mouse buttons',async({page})=>{
+ await page.goto(process.env.E2E_URL||'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);
+ await page.locator('[data-exam="select:practice"]').click();await page.locator('[data-exam="start"]').click();
+ for(const selector of ['[data-gear="D"]','#look-center']){
+  await page.keyboard.down('w');await page.waitForTimeout(100);await page.locator(selector).click();await page.keyboard.down('Space');
+  await expect.poll(()=>page.evaluate(()=>window.larria.physics.throttle)).toBe(0);await expect(page.locator('#brake')).toHaveClass(/pressed/);
+  await page.keyboard.up('w');await page.keyboard.up('Space');
+ }
+ await page.locator('#exam-hud [data-exam="pause"]').focus();await page.keyboard.press('Space');await expect(page.locator('[data-exam="resume"]')).toBeVisible();await page.locator('[data-exam="resume"]').click();
+ await page.locator('#steering-pad').focus();await page.keyboard.press('ArrowLeft');await expect.poll(()=>page.evaluate(()=>window.larria.physics.steering)).toBeGreaterThan(0);
+ await page.keyboard.press('Home');await expect.poll(()=>page.evaluate(()=>window.larria.physics.steering)).toBe(0);
+ await page.keyboard.press('ArrowRight');await expect.poll(()=>page.evaluate(()=>window.larria.physics.steering)).toBeLessThan(0);await page.keyboard.press('Home');
+ for(const button of ['right','middle']){await page.locator('#throttle').click({button});await expect.poll(()=>page.evaluate(()=>window.larria.physics.throttle)).toBe(0);}
+ await page.locator('button[data-view="orbit"]').click();await page.locator('[data-mirror="left"]').click();await page.keyboard.press('r');await expect(page.locator('#expanded-wrap')).toBeHidden();
+ await page.locator('[data-mirror="left"]').click();await page.locator('[data-exam="pause"]:visible').click();await expect(page.locator('#expanded-wrap')).toBeHidden();
+});
+
+test('late pointer lock is rejected after view invalidation and invisible mirrors skip rendering',async({page})=>{
+ await open(page);await start(page);
+ await page.evaluate(()=>{const canvas=document.querySelector('#viewport canvas');canvas.requestPointerLock=()=>new Promise(resolve=>window.__resolveLock=resolve);});
+ await page.locator('#look-lock').click();await page.locator('button[data-view="orbit"]').click();
+ const late=await page.evaluate(()=>{const canvas=document.querySelector('#viewport canvas');let exited=0;Object.defineProperty(document,'pointerLockElement',{configurable:true,get:()=>canvas});document.exitPointerLock=()=>{exited++;Object.defineProperty(document,'pointerLockElement',{configurable:true,value:null});};document.dispatchEvent(new Event('pointerlockchange'));window.__resolveLock();return exited;});expect(late).toBe(1);
+ const calls=await page.evaluate(()=>{const l=window.larria;document.querySelector('.mirror-strip').style.visibility='hidden';l.mirrors.showSurfaces(false);let count=0;const render=l.renderer.render;l.renderer.render=()=>count++;try{l.mirrors.update(l.renderer,l.scene,l.camera);l.mirrors.draw(l.renderer,null);}finally{l.renderer.render=render;}return count;});expect(calls).toBe(0);
+});
+
+
+test('legacy void pointer lock accepts delayed event but rejects event after cancellation',async({page})=>{
+ await open(page);await start(page);
+ await page.evaluate(()=>{const canvas=document.querySelector('#viewport canvas');window.__lockElement=null;window.__lockExits=0;Object.defineProperty(document,'pointerLockElement',{configurable:true,get:()=>window.__lockElement});canvas.requestPointerLock=()=>undefined;document.exitPointerLock=()=>{window.__lockExits++;window.__lockElement=null;document.dispatchEvent(new Event('pointerlockchange'));};window.__grantLock=()=>{window.__lockElement=canvas;document.dispatchEvent(new Event('pointerlockchange'));};});
+ await page.locator('#look-lock').click();await page.waitForTimeout(50);await page.evaluate(()=>window.__grantLock());expect(await page.evaluate(()=>window.larria.look.locked)).toBe(true);expect(await page.evaluate(()=>window.__lockExits)).toBe(0);
+ await page.locator('#look-lock').click();await page.locator('#look-lock').click();await page.locator('button[data-view="orbit"]').click();await page.evaluate(()=>window.__grantLock());expect(await page.evaluate(()=>window.larria.look.locked)).toBe(false);expect(await page.evaluate(()=>window.__lockExits)).toBe(2);
+});

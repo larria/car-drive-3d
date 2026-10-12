@@ -12,6 +12,7 @@ test('default game W/S actually switches R/D after braking; Space and touch brak
  await page.keyboard.down('s');await expect.poll(async()=>{const s=await snapshot(page);return s.brake===1&&s.gear==='D';}).toBe(true);
  await expect.poll(async()=>{const s=await snapshot(page);return s.gear==='R'&&s.throttle===1;},{timeout:12000}).toBe(true);
  const reverseZ=(await snapshot(page)).z;await expect.poll(async()=>(await snapshot(page)).z).toBeGreaterThan(reverseZ+.4);
+ await expect.poll(async()=>(await snapshot(page)).speed).toBeLessThan(-1);
  await page.keyboard.up('s');await page.keyboard.down('w');
  await expect.poll(async()=>{const s=await snapshot(page);return s.brake===1&&s.gear==='R';}).toBe(true);
  await expect.poll(async()=>{const s=await snapshot(page);return s.gear==='D'&&s.throttle===1;},{timeout:12000}).toBe(true);
@@ -118,6 +119,7 @@ test('speed sliders drag live, persist on input, retain focus and keep mobile he
 test('shared speed bounds and settings header stay usable after scrolling on mobile',async({page})=>{
  await open(page);await page.setViewportSize({width:390,height:600});await page.locator('.project-settings').click();
  for(const input of await page.locator('[data-speed-course]').all())expect(await input.getAttribute('min')).toBe('3');
+ await expect(page.locator('[data-speed-course="reverse-garage"]')).toHaveValue('6');
  await expect(page.locator('#settings-description')).toContainText('无需点击保存');
  const body=page.locator('.settings-body');await body.evaluate(e=>e.scrollTop=e.scrollHeight);
  const close=page.locator('#settings-dialog .close-dialog');const box=await close.boundingBox();expect(box.y).toBeGreaterThanOrEqual(0);expect(box.y+box.height).toBeLessThan(600);

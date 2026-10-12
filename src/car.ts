@@ -6,8 +6,10 @@ import { ferrariViewProfile } from './ferrari-view-profile';
 export async function loadCar() {
   const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
-  const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}models/ferrari.glb`);
-  draco.dispose();
+  const gltf = await (async () => {
+    try { return await loader.loadAsync(`${import.meta.env.BASE_URL}models/ferrari.glb`); }
+    finally { draco.dispose(); }
+  })();
   const root = gltf.scene;
   const paint = new THREE.MeshPhysicalMaterial({ color: 0x668d83, metalness: .82, roughness: .24, clearcoat: 1, clearcoatRoughness: .16 });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0xc6ddd9, metalness: .08, roughness: .08, transparent: true, opacity: .17, depthWrite: false, side: THREE.DoubleSide });

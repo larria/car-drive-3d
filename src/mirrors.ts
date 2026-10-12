@@ -28,14 +28,29 @@ export class MirrorSystem {
     }
   }
   showSurfaces(visible: boolean) { this.entries.forEach(e => e.surface.visible = visible); }
-  update(renderer:THREE.WebGLRenderer,scene:THREE.Scene,_eye?:THREE.PerspectiveCamera) {
+  private visible(element:HTMLElement|null) {
+    if (!element || !element.getClientRects().length) return false;
+    for (let node:HTMLElement|null=element;node;node=node.parentElement) {
+      const style=getComputedStyle(node);
+      if(node.hidden||style.display==='none'||style.visibility==='hidden'||style.visibility==='collapse'||Number(style.opacity)===0)return false;
+    }
+    const rect=element.getBoundingClientRect();
+    return rect.width>0&&rect.height>0&&rect.bottom>0&&rect.right>0&&rect.top<innerHeight&&rect.left<innerWidth;
+  }
+  private previewVisible(name:string,expanded:string|null) {
+    return this.enabled&&(this.visible(document.getElementById(`mirror-${name}`))||(expanded===name&&this.visible(document.getElementById('mirror-expanded'))));
+  }
+  update(renderer:THREE.WebGLRenderer,scene:THREE.Scene,_eye?:THREE.PerspectiveCamera,expanded:string|null=null) {
+    const needed=this.entries.map(e=>e.surface.visible||this.previewVisible(e.name,expanded));
+    if(!needed.some(Boolean))return;
     scene.updateMatrixWorld(true);
     const visibility = this.entries.map(e => e.surface.visible);
     const target = renderer.getRenderTarget(), viewport = renderer.getViewport(new THREE.Vector4()), scissor = renderer.getScissor(new THREE.Vector4()), scissorTest = renderer.getScissorTest();
     this.entries.forEach(e => e.surface.visible = false);
     try {
       renderer.setScissorTest(false);
-      for (const e of this.entries) {
+      for (const [i,e] of this.entries.entries()) {
+        if(!needed[i])continue;
         e.camera.position.copy(this.root.localToWorld(e.position.clone()));
         const direction = e.direction.clone().transformDirection(this.root.matrixWorld);
         e.camera.up.set(0,1,0).transformDirection(this.root.matrixWorld);
@@ -52,7 +67,7 @@ export class MirrorSystem {
     const viewport=renderer.getViewport(new THREE.Vector4()), scissor=renderer.getScissor(new THREE.Vector4()), scissorTest=renderer.getScissorTest();
     const canvas=renderer.domElement.getBoundingClientRect(), size=renderer.getSize(new THREE.Vector2());
     const drawRect=(element:HTMLElement|null,e:typeof this.entries[number])=>{
-      if (!element || !element.getClientRects().length) return;
+      if (!element || !this.visible(element)) return;
       const rect=element.getBoundingClientRect(); if (!rect.width || !rect.height) return;
       const x=(rect.left-canvas.left)*size.x/canvas.width, y=(canvas.bottom-rect.bottom)*size.y/canvas.height, w=rect.width*size.x/canvas.width, h=rect.height*size.y/canvas.height;
       renderer.setViewport(x,y,w,h);renderer.setScissor(x,y,w,h);renderer.clearDepth();renderer.render(e.preview,e.previewCamera);

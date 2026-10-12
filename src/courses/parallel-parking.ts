@@ -19,7 +19,7 @@ export function parallelParking(length: number = VEHICLE.length, width: number =
     description:'倒车入库并停稳，前进出库后穿过终点线。倒车后完成入库前不得前进；出库后不得再倒车。',
     dimensions:`库长 ${L.toFixed(2)} m · 库宽 ${B1.toFixed(2)} m · 车道宽 ${B2.toFixed(2)} m · 车道长 30 m`,
     width:B2,start:p(0,startZ+.5),startYaw:0,startMark:seg(-right,startZ,right,startZ),
-    polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,kind:i>=4?'obstacle':'marking',reason:i===4?'碰擦前车，考试不合格':i===5?'碰擦后车，考试不合格':'车辆越出边界线'})),
+    polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,kind:i>=4?'obstacle':'marking',reason:i===4?'车头越线，考试不合格':i===5?'车尾越线，考试不合格':'车辆越出边界线'})),
     guides:[seg(right,-L/2,right,L/2)],center:[],finish:seg(-right,finishZ,right,finishZ),finishExitNormal:p(0,-1),
     parkZone:{minX:right,maxX:outside,minZ:-L/2,maxZ:L/2,heading:0,tolerance:Math.PI/12},
     bounds:boundsOf([...road,...bay]),requiredParks:1,notParkedReason:'未完成侧方入库，考试不合格',

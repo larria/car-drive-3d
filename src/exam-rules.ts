@@ -33,8 +33,19 @@ function contains(poly: readonly Point[], p: Point): boolean {
   }
   return inside;
 }
+/** Inclusive marking contact; generic intersects deliberately remains strict. */
+export function inclusiveIntersects(a: Point,b: Point,c: Point,d: Point): boolean {
+  const cross=(p:Point,q:Point,r:Point)=>(q.x-p.x)*(r.z-p.z)-(q.z-p.z)*(r.x-p.x);
+  const on=(p:Point,q:Point,r:Point)=>Math.abs(cross(p,q,r))<=1e-8&&r.x>=Math.min(p.x,q.x)-1e-8&&r.x<=Math.max(p.x,q.x)+1e-8&&r.z>=Math.min(p.z,q.z)-1e-8&&r.z<=Math.max(p.z,q.z)+1e-8;
+  return intersects(a,b,c,d)||on(a,b,c)||on(a,b,d)||on(c,d,a)||on(c,d,b);
+}
 function touches(poly: Point[], line: Segment): boolean {
-  return line.some(q=>contains(poly,q))||poly.some((a,i)=>intersects(a,poly[(i+1)%poly.length],...line));
+  return line.some(q=>contains(poly,q))||poly.some((a,i)=>inclusiveIntersects(a,poly[(i+1)%poly.length],...line));
+}
+const MAX_SWEEP_STEPS=4096;
+function sweepSteps(a: ExamPose,b: ExamPose): number {
+  const yaw=Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw));
+  return Math.max(1,Math.ceil((Math.hypot(b.x-a.x,b.z-a.z)+3*Math.abs(yaw)+WHEEL_RADIUS*Math.abs((b.steering??0)-(a.steering??0)))/.02));
 }
 // Reference speed thresholds are px/frame; 7mm/px at 60Hz converts them to m/s.
 export const PARK_DIRECTION_EPS = .01 * .007 * 60;
@@ -48,6 +59,8 @@ export class ExamRules {
   private bodyContact=false;
   private wheelContact=false;
   private parkingAttempt=false;
+  private startedMoving=false;
+  private countedParkPhases=new Set<number>();
   private boundaryPose: ExamPose | null=null;
   startedW=false;
   totalElapsed=0;
@@ -77,7 +90,7 @@ export class ExamRules {
       const along=((q.x-a.x)*dx+(q.z-a.z)*dz)/lengthSquared;
       return along>=0&&along<=1;
     };
-    const allowed=premature ? p.speed>PARK_DIRECTION_EPS : this.course.id!=='reverse-garage'||p.speed>=0;
+    const allowed=p.speed>0 && (-Math.sin(p.yaw)*n.x-Math.cos(p.yaw)*n.z)>1e-7;
     const tires=(pose:ExamPose)=>wheelPolygons(pose).slice(premature?0:2,premature?2:4).flat();
     const previous=this.previousPose;
     this.previousPose={...p};
@@ -85,7 +98,7 @@ export class ExamRules {
       const yawDelta=Math.atan2(Math.sin(p.yaw-previous.yaw),Math.cos(p.yaw-previous.yaw));
       // Bound both translation and corner arc travel; never interpolate the long yaw path.
       const radius=Math.hypot(VEHICLE.width/2,VEHICLE.length/2);
-      const steps=Math.max(1,Math.ceil((Math.hypot(p.x-previous.x,p.z-previous.z)+radius*Math.abs(yawDelta))/.02));
+      const steps=Math.min(MAX_SWEEP_STEPS,Math.max(1,Math.ceil((Math.hypot(p.x-previous.x,p.z-previous.z)+radius*Math.abs(yawDelta))/.02)));
       let beforeCorners=tires(previous);
       for(let step=1;step<=steps;step++){
         const t=step/steps;
@@ -127,17 +140,20 @@ export class ExamRules {
   }
   reset(){
     this.score=100;this.deductions=[];this.bodyContact=false;this.wheelContact=false;this.parkingAttempt=false;this.boundaryPose=null;
-    this.startedW=false;this.totalElapsed=0;this.outsideStopped=0;
+    this.startedW=false;this.startedMoving=false;this.countedParkPhases.clear();this.totalElapsed=0;this.outsideStopped=0;
     this.parkCount=0;this.parked=false;this.reversed=false;this.forwardAfterParked=false;
     this.dirPhase=0;this.dirPhaseStarted=false;
     this.previousPose=null;this.crossedFinishOutward=false;this.prematureFinish=false;
   }
   step(p: ExamPose, dt=1/60): ExamResult | null {
+    if(![p.x,p.z,p.yaw,p.speed,p.steering??0,dt].every(Number.isFinite)||dt<0||Math.max(Math.abs(p.x),Math.abs(p.z))>1e6||Math.abs(p.yaw)>1e6||Math.abs(p.steering??0)>1e6)return this.fail('车辆状态数值异常，考试不合格');
+    if(this.boundaryPose&&sweepSteps(this.boundaryPose,p)>MAX_SWEEP_STEPS)return this.fail('车辆位移超出检测预算，考试不合格');
     if(p.throttle)this.startedW=true;
+    if(Math.abs(p.speed)>=STOP_EPS)this.startedMoving=true;
     const course=this.course;
     if(!isParkingCourse(course)){
       if(course.rules.noReverse && p.speed < -REVERSE_EPS)return this.fail('中途倒车，考试不合格');
-      if(course.rules.noStopAfterGo&&this.startedW&&!p.throttle&&p.speed<STOP_EPS)return this.fail('中途停车，考试不合格');
+      if(course.rules.noStopAfterGo&&this.startedMoving&&Math.abs(p.speed)<STOP_EPS)return this.fail('中途停车，考试不合格');
     }
     const corners=bodyCorners(p);
     const hits=(line:Segment)=>touches(corners,line);
@@ -146,7 +162,7 @@ export class ExamRules {
     this.boundaryPose={...p};
     if(previous){
       const yaw=Math.atan2(Math.sin(p.yaw-previous.yaw),Math.cos(p.yaw-previous.yaw));
-      const steps=Math.max(1,Math.ceil((Math.hypot(p.x-previous.x,p.z-previous.z)+3*Math.abs(yaw)+WHEEL_RADIUS*Math.abs((p.steering??0)-(previous.steering??0)))/.02));
+      const steps=sweepSteps(previous,p);
       for(let i=1;i<=steps;i++){const t=i/steps;samples.push({...p,x:previous.x+(p.x-previous.x)*t,z:previous.z+(p.z-previous.z)*t,yaw:previous.yaw+yaw*t,steering:(previous.steering??0)+((p.steering??0)-(previous.steering??0))*t});}
     }else samples.push(p);
     const wheelHits=(lines: readonly Segment[])=>samples.some(q=>wheelPolygons(q).some(w=>lines.some(l=>touches(w,l))));
@@ -155,7 +171,9 @@ export class ExamRules {
       // Reference checks direction first, before timers, walls and parking state.
       if(course.direction==='parallel'){
         if(reverse)this.reversed=true;
-        if(this.parked&&forward)this.forwardAfterParked=true;
+        const zone=course.parkZone;
+        // Low-speed bay adjustments are still parking, not irreversible exit.
+        if(this.parkCount>0&&forward&&!corners.every(c=>c.x>=zone.minX&&c.x<=zone.maxX&&c.z>=zone.minZ&&c.z<=zone.maxZ))this.forwardAfterParked=true;
         if(this.reversed&&this.parkCount===0&&forward)return this.fail('倒车后入库前不得前进，考试不合格');
         if(this.forwardAfterParked&&reverse)return this.fail('出库后不得再倒车，考试不合格');
       }else if(forward||reverse){
@@ -217,11 +235,17 @@ export class ExamRules {
       }
       const heading=Math.abs(Math.atan2(Math.sin(p.yaw-zone.heading),Math.cos(p.yaw-zone.heading)))<=zone.tolerance;
       const valid=inZone&&heading&&Math.abs(p.speed)<PARK_STOP_EPS;
-      if(valid&&!this.parked){this.parked=true;this.parkCount++;}
+      if(valid&&!this.parked){
+        this.parked=true;
+        const phase=course.direction==='parallel'?1:this.dirPhase;
+        if((course.direction==='parallel'||(phase===1||phase===3)&&this.dirPhaseStarted)&&!this.countedParkPhases.has(phase)){
+          this.countedParkPhases.add(phase);this.parkCount++;
+        }
+      }
       else if(!valid&&this.parked)this.parked=false;
-      // Garage finish ignores actual negative speed, including the tiny reverse deadband.
-      if(this.finished(p,corners,this.parkCount<course.requiredParks))
-        return this.parkCount>=course.requiredParks?this.result(true,course.passReason):this.fail(course.notParkedReason);
+      const complete=this.parkCount>=course.requiredParks&&(course.direction==='parallel'||this.dirPhase===4&&this.dirPhaseStarted);
+      if(this.finished(p,corners,!complete))
+        return complete?this.result(true,course.passReason):this.fail(course.notParkedReason);
       return null;
     }
     if(wheelHits(course.boundaries))return this.fail('车辆越出边界线');
