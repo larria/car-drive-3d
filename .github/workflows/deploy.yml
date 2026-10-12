@@ -1,0 +1,37 @@
+name: Check LARRIA
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Install Playwright Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Test browser, settings and production PWA
+        run: npm run test:browser:all
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-diagnostics
+          path: |
+            test-results/
+            artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
