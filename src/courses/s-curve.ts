@@ -30,7 +30,7 @@ export function sCurve() {
     width,start:{x:0,z:9.5},startYaw:0,startMark:[{x:-1.75,z:9.5},{x:1.75,z:9.5}],
     polygon,boundaries:[...walls(sideA),...walls(sideB)],center,
     // Independent reference finish, deliberately NOT snapped to the chord extension.
-    finish:[{x:23.8566,z:-5.6066},{x:27.3566,z:-5.6066}],
+    finish:[{x:23.8566,z:-5.6066},{x:27.3566,z:-5.6066}],finishExitNormal:{x:0,z:-1},
     bounds:boundsOf(polygon),rules:{noReverse:true,noStopAfterGo:true},passReason:'车辆顺利通过曲线行驶'};
   return {...course,sideA,sideB,o1,o2};
 }

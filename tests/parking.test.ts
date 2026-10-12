@@ -77,8 +77,12 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   const r=new ExamRules(garage),p=parkedGarage();r.step(p);expect(r.parkCount).toBe(1);
   r.step({...p,speed:PARK_STOP_EPS});expect(r.parked).toBe(false);r.step(p);expect(r.parkCount).toBe(2);
   const finish=pose({x:9,z:0,yaw:-Math.PI/2,speed:-.001});expect(r.step(finish)).toBeNull();
-  expect(r.step({...finish,speed:0})?.passed).toBe(true);
-  r.reset();expect(r.step({...finish,speed:0})?.reason).toContain('两次入库');
+  expect(r.step({...finish,speed:0})).toBeNull();
+  expect(r.step({...finish,x:11.1,speed:-.001})).toBeNull();
+  expect(r.step({...finish,x:11.1,speed:0})).toBeNull();
+  r.step({...finish,x:6,speed:0});expect(r.step({...finish,x:11.1,speed:0})?.passed).toBe(true);
+  r.reset();expect(r.step({...finish,speed:0})).toBeNull();
+  expect(r.step({...finish,x:11.1,speed:0})?.reason).toContain('两次入库');
  });
  it('stops on cumulative outside 2s, not 2s of one continuous stop',()=>{
   const r=new ExamRules(parallel),p=startParallel();r.step({...p,throttle:true});
@@ -99,7 +103,8 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   const r=new ExamRules(parallel);
   expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.minZ}))?.reason).toContain('前车');
   expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.maxZ}))?.reason).toContain('后车');
-  expect(r.step(pose({x:0,z:parallel.finish[0].z}))?.reason).toContain('未完成侧方入库');
+  r.reset();expect(r.step(pose({x:0,z:parallel.finish[0].z}))).toBeNull();
+  expect(r.step(pose({x:0,z:parallel.finish[0].z-VEHICLE.length/2-.01}))?.reason).toContain('未完成侧方入库');
  });
  it('cleans counters, phases, timers and course ownership on four-course switching',async()=>{
   const {COURSES}=await import('../src/courses');const s=new ExamSession();for(const c of [...COURSES,...COURSES]){

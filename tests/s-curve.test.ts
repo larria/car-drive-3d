@@ -31,7 +31,9 @@ describe('S rules and session isolation',()=>{
  it('fails crossing, prioritizes boundary over independent finish and passes correct finish',()=>{
   expect(new ExamRules(s).step(pose({x:1,z:8,speed:1}))?.reason).toContain('边界');
   expect(new ExamRules(s).step(pose({x:23.9,z:-4.8,speed:1}))?.reason).toContain('边界');
-  expect(new ExamRules(s).step(pose({x:25.6066,z:-4.5,speed:1}))).toEqual({passed:true,reason:s.passReason});
+  const r=new ExamRules(s);expect(r.step(pose({x:25.6066,z:-4.5,speed:1}))).toBeNull();
+  expect(r.step(pose({x:25.6066,z:-7.6566,speed:1}))).toBeNull();
+  expect(r.step(pose({x:25.6066,z:-7.7,speed:1}))).toEqual({passed:true,reason:s.passReason});
  });
  it('retry preserves course, pause freezes rules, switching drops latch and old result',()=>{
   const session=new ExamSession();session.select(s);session.start();session.step(pose({throttle:true,speed:1}));session.pause();session.step(pose());expect(session.result).toBeNull();session.resume();session.step(pose());expect(session.result?.passed).toBe(false);

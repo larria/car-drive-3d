@@ -77,7 +77,7 @@ async function init(){
   const prevPos=new THREE.Vector3();
   const drivingUi=new DrivingUi($('#focus-toggle') as HTMLButtonElement);
   const session=new ExamSession();
-  const look=new CockpitLook(renderer.domElement,()=>view==='cockpit'&&session.state==='running', $('#look-lock') as HTMLButtonElement, toast);
+  const look=new CockpitLook(renderer.domElement,()=>view==='cockpit'&&(session.state==='running'||session.state==='result'), $('#look-lock') as HTMLButtonElement, toast);
   $('#look-lock').onclick=()=>{void look.lock();renderer.domElement.focus({preventScroll:true});};
   $('#look-center').onclick=()=>{look.reset();toast('视角已回正');};
   const examUi=new ExamUi(session,action=>{
@@ -119,7 +119,7 @@ async function init(){
   ($('#setting-mirrors') as HTMLInputElement).onchange=e=>changeSettings({mirrorsExpanded:(e.target as HTMLInputElement).checked});
   $('#settings-running').onclick=openSettings;
   function setView(next:'orbit'|'cockpit'|'follow'){if(next!==view)look.unlock();view=next;orbit.enabled=view==='orbit';look.reset();$('#look-lock').hidden=view!=='cockpit'||!matchMedia('(pointer:fine)').matches;$('#look-center').hidden=view!=='cockpit';document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'移动鼠标转头 · 双击回正':'车辆跟随 · 自由驾驶';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
-    if(view==='orbit'&&(session.mode==='practice'||!session.active)){const b=session.mode==='practice'?practiceBounds:session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=session.mode==='practice'?145:80;orbit.target.copy(center);camera.position.copy(center).add(session.mode==='practice'?new THREE.Vector3(-extent*.06,extent*.92,extent*.12):new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
+    if(view==='orbit'&&session.state!=='result'&&(session.mode==='practice'||!session.active)){const b=session.mode==='practice'?practiceBounds:session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=session.mode==='practice'?145:80;orbit.target.copy(center);camera.position.copy(center).add(session.mode==='practice'?new THREE.Vector3(-extent*.06,extent*.92,extent*.12):new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
     else if(view==='orbit'){orbit.maxDistance=16;camera.position.copy(car.root.localToWorld(new THREE.Vector3(-6,3.25,-6.6)));orbit.target.copy(car.root.position).add(new THREE.Vector3(0,.65,0));camera.fov=38;camera.updateProjectionMatrix();}
     else{camera.fov=view==='cockpit'?70:48;camera.updateProjectionMatrix();}
   }
@@ -137,7 +137,8 @@ async function init(){
   renderer.domElement.tabIndex=-1;
   // Pointer steering leaves focus on its slider; release that focus before keyboard driving.
   document.addEventListener('keydown',e=>{
-    if(session.state!=='running'||document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey||activeUiFocus()||textFocus(e.target))return;
+    if((session.state!=='running'&&session.state!=='result')||document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey||activeUiFocus()||textFocus(e.target))return;
+    if(session.state==='result'){if(['Digit1','Digit2','Digit3'].includes(e.code)){e.preventDefault();if(!e.repeat)setView(({Digit1:'orbit',Digit2:'cockpit',Digit3:'follow'} as const)[e.code as 'Digit1'|'Digit2'|'Digit3']);}else if(e.code==='Escape'){look.consumeEscape();if(expanded)closeExpanded();}return;}
     if(!drivingCodes.has(e.code)&&!commandCodes.has(e.code))return;
     e.preventDefault();
     if(e.repeat)return;

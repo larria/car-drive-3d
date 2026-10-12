@@ -6,6 +6,8 @@ interface CourseBase {
   width: number;
   start: Point; startYaw: number; startMark: Segment;
   polygon: Point[]; boundaries: Segment[]; center: Point[]; finish: Segment;
+  /** Unit normal pointing from the course towards the finish exit. */
+  finishExitNormal: Point;
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
   passReason: string;
 }

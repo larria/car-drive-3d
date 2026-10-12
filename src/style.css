@@ -62,3 +62,16 @@ body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
 #pwa-dialog button:disabled{opacity:.55}
 @media(max-width:780px){.briefing-top{flex-direction:column;gap:12px}.briefing-top-actions{width:100%;padding-top:0}.briefing-top-actions .exam-primary{flex:1;order:-1}.briefing-top-actions .exam-secondary{white-space:nowrap}.briefing-page h1{font-size:clamp(30px,8vw,40px)}.briefing-grid{margin-top:20px}}
 @media(max-height:700px) and (min-width:781px){.briefing-top{margin-top:6px}.briefing-top h1{font-size:30px}.briefing-grid{margin-top:20px}}
+
+/* Result inspection keeps the frozen driving scene unobscured. */
+.home-version{position:fixed;right:36px;bottom:49px;font-size:10px;letter-spacing:1px;color:#7a887d;font-variant-numeric:tabular-nums}
+body[data-exam="result"] main{visibility:visible;pointer-events:none}
+body[data-exam="result"] main>.intro,body[data-exam="result"] main>.model-card,body[data-exam="result"] .drive-console,body[data-exam="result"] .scene-caption,body[data-exam="result"] header{display:none}
+body[data-exam="result"] #exam-overlay{inset:auto auto 28px 28px;width:min(370px,calc(100vw - 56px));padding:0;overflow:visible;background:transparent;backdrop-filter:none;pointer-events:none}
+body[data-exam="result"] .right-tools{bottom:28px}
+body[data-exam="result"] #settings-running{display:none}
+.result-inspector{pointer-events:auto;background:#f5f6eeef;border:1px solid #fff;border-left:3px solid #6f9178;border-radius:13px;padding:20px 22px;box-shadow:0 12px 40px #233c3020;backdrop-filter:blur(16px)}
+.result-inspector.failed{border-left-color:#ac8160}
+.result-topline{display:flex;align-items:center;justify-content:space-between;gap:12px}.result-topline .exam-eyebrow{font-size:9px;letter-spacing:1.2px}.result-topline button{font-size:10px;min-height:32px;color:#62776a}
+.result-inspector h1{font-size:25px;font-weight:450;margin:9px 0 15px;letter-spacing:-.5px}.result-inspector .result-reason{font-size:13px;line-height:1.8;margin:0 0 13px}.inspection-note{font-size:11px;color:#728176;line-height:1.9;border-top:1px solid #d5ded1;padding-top:13px;margin:0}.result-inspector .exam-bottom-actions{margin-top:18px;justify-content:space-between;gap:8px}.result-inspector .exam-bottom-actions button{padding:12px 16px}.result-inspector.collapsed{padding:10px 18px}.result-inspector.collapsed h1{font-size:16px;margin:2px 0 4px}
+@media(max-width:780px){.home-version{right:20px;bottom:calc(43px + env(safe-area-inset-bottom))}body[data-exam="result"] #exam-overlay{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));width:calc(100vw - 24px)}.result-inspector{padding:12px 16px}.result-inspector h1{font-size:22px;margin:4px 0 9px}.result-inspector .inspection-note{font-size:10px;padding-top:9px}.result-inspector .exam-bottom-actions{margin-top:10px}body[data-exam="result"] .views{top:12px}body[data-exam="result"] .right-tools{bottom:auto;top:64px;right:12px}body[data-exam="result"] .mirror-strip{top:115px}.result-inspector .result-reason{margin-bottom:8px}}

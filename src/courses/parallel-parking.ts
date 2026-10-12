@@ -20,7 +20,7 @@ export function parallelParking(length: number = VEHICLE.length, width: number =
     dimensions:`库长 ${L.toFixed(2)} m · 库宽 ${B1.toFixed(2)} m · 车道宽 ${B2.toFixed(2)} m · 车道长 30 m`,
     width:B2,start:p(0,startZ+.5),startYaw:0,startMark:seg(-right,startZ,right,startZ),
     polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,reason:i===4?'碰擦前车，考试不合格':i===5?'碰擦后车，考试不合格':'车辆越出边界线'})),
-    guides:[seg(right,-L/2,right,L/2)],center:[],finish:seg(-right,finishZ,right,finishZ),
+    guides:[seg(right,-L/2,right,L/2)],center:[],finish:seg(-right,finishZ,right,finishZ),finishExitNormal:p(0,-1),
     parkZone:{minX:right,maxX:outside,minZ:-L/2,maxZ:L/2,heading:0,tolerance:Math.PI/12},
     bounds:boundsOf([...road,...bay]),requiredParks:1,notParkedReason:'未完成侧方入库，考试不合格',
     direction:'parallel',passReason:'车辆顺利通过侧方位停车',

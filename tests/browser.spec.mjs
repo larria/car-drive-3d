@@ -37,7 +37,7 @@ test('complete actual driving pass using only held keyboard and screen steering'
   const steer=turning?(straight?Math.max(-1,Math.min(1,(-Math.PI/2-p.yaw)*3)):-1):Math.max(-.4,Math.min(.4,(p.x+.65)*.6-p.yaw*2));
   await page.mouse.move(cx-steer*95,cy);await page.waitForTimeout(18);
  }
- await page.keyboard.up('w');await page.mouse.up();await expect(page.locator('.result-card h1')).toHaveText('考试通过');await page.screenshot({path:'artifacts/exam-pass.png'});
+ await page.keyboard.up('w');await page.mouse.up();await expect(page.locator('.result-inspector h1')).toHaveText('✓ 考试通过');await page.screenshot({path:'artifacts/exam-pass.png'});
  const frozen=await pos(page);await page.keyboard.down('w');await page.waitForTimeout(300);await page.keyboard.up('w');expect(await pos(page)).toEqual(frozen);
  await page.locator('[data-exam="retry"]:visible').click();expect((await pos(page))[2]).toBe(9);expect(await page.evaluate(()=>window.larria.session.rules.startedW)).toBe(false);
 });
@@ -207,7 +207,7 @@ test('all courses preserve selected view on failure and success retry with match
   await page.locator(`[data-exam="${select}"]`).click();await page.locator('[data-exam="start"]').click();
   await expect(page.locator('button[data-view="cockpit"]')).toHaveClass(/active/);
   await page.locator(`button[data-view="${view}"]`).click();
-  await page.keyboard.down('w');await expect(page.locator('.result-card h1')).toBeVisible({timeout:35000});await page.keyboard.up('w');
+  await page.keyboard.down('w');await expect(page.locator('.result-inspector h1')).toBeVisible({timeout:35000});await page.keyboard.up('w');
   await page.locator('[data-exam="retry"]:visible').click();
   const data=await page.evaluate(()=>({view:window.larria.view,active:[...document.querySelectorAll('button[data-view].active')].map(b=>b.dataset.view),surfaces:window.larria.mirrors.entries.map(e=>e.surface.visible),strip:document.querySelector('.mirror-strip').hidden,gear:window.larria.physics.gear,course:window.larria.session.course.id}));
   expect(data.view).toBe(view);expect(data.active).toEqual([view]);expect(data.strip).toBe(false);expect(data.surfaces).toEqual([false,false,false]);expect(data.gear).toBe('D');expect(data.course).toBe(id);
@@ -217,4 +217,18 @@ test('all courses preserve selected view on failure and success retry with match
   expect(await page.evaluate(()=>window.larria.mirrors.entries.map(e=>e.surface.visible))).toEqual([true,true,true]);
   await page.locator('[data-exam="exit"]:visible').click();
  }
+});
+
+
+test('result inspection preserves frozen scene and permits only observation',async({page})=>{
+ await open(page);await expect(page.locator('.home-version')).toHaveText('v1.2.2');await start(page);
+ await page.keyboard.down('s');await expect(page.locator('.result-inspector')).toBeVisible();await page.keyboard.up('s');
+ await expect(page.locator('#throttle')).toBeHidden();await expect(page.locator('button[data-view="orbit"]')).toBeVisible();
+ const snapshot=()=>page.evaluate(()=>({position:window.larria.physics.chassis.position.toArray(),gear:window.larria.physics.gear,time:window.larria.session.rules.totalElapsed}));const frozen=await snapshot();
+ await page.locator('[data-exam="result-toggle"]').click();await expect(page.locator('.result-content')).toBeHidden();
+ await page.keyboard.press('1');await expect.poll(()=>page.evaluate(()=>window.larria.view)).toBe('orbit');await page.mouse.move(700,400);await page.mouse.wheel(0,-100);
+ await page.keyboard.press('2');await page.mouse.move(600,400);await page.mouse.move(780,440,{steps:6});expect(Math.abs(await page.evaluate(()=>window.larria.look.yaw))).toBeGreaterThan(.1);
+ await page.keyboard.down('w');await page.keyboard.press('z');await page.waitForTimeout(250);await page.keyboard.up('w');expect(await snapshot()).toEqual(frozen);
+ await page.setViewportSize({width:390,height:844});await page.locator('[data-exam="result-toggle"]').click();await expect(page.locator('[data-exam="retry"]:visible')).toBeInViewport();
+ await page.locator('[data-exam="retry"]:visible').click();expect(await state(page)).toBe('running');expect(await page.evaluate(()=>window.larria.view)).toBe('cockpit');
 });

@@ -110,7 +110,7 @@ export class CockpitLook {
   }
   private canLook(e: PointerEvent) {
     if (!this.enabled() || document.querySelector('dialog[open]')) return false;
-    return !Array.from(document.querySelectorAll<HTMLElement>('header, .intro, .model-card, .views, .mirror-strip, .right-tools, .drive-console, footer, .scene-caption, #expanded-wrap, #exam-overlay, #exam-hud')).some(el => {
+    return !Array.from(document.querySelectorAll<HTMLElement>('header, .intro, .model-card, .views, .mirror-strip, .right-tools, .drive-console, footer, .scene-caption, #expanded-wrap, body:not([data-exam="result"]) #exam-overlay, .result-inspector, #exam-hud')).some(el => {
       const style = getComputedStyle(el);
       if (el.hidden || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
       const r = el.getBoundingClientRect();

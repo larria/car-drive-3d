@@ -19,7 +19,7 @@ export function reverseGarage(length: number = VEHICLE.length): ParkingCourse {
     dimensions:`库长 ${L.toFixed(2)} m · 库宽 2.30 m · 车道宽 6.70 m · 车道长 22 m`,
     width:6.7,start:p(-7.5,0),startYaw:-Math.PI/2,startMark:seg(-8,-halfRoad,-8,halfRoad),
     polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,reason:i===5?'碰擦库底，考试不合格':i>=3?'碰擦库侧边，考试不合格':'车辆越出边界线'})),
-    guides:[seg(-halfBay,halfRoad,halfBay,halfRoad),seg(-11,0,11,0)],center:[],finish:seg(9,-halfRoad,9,halfRoad),
+    guides:[seg(-halfBay,halfRoad,halfBay,halfRoad),seg(-11,0,11,0)],center:[],finish:seg(9,-halfRoad,9,halfRoad),finishExitNormal:p(1,0),
     parkZone:{minX:-halfBay,maxX:halfBay,minZ:halfRoad,maxZ:bottom,heading:0,tolerance:Math.PI/12},
     bounds:boundsOf([...road,...bay]),requiredParks:2,notParkedReason:'未完成两次入库，考试不合格',
     direction:'strict',passReason:'车辆顺利通过倒车入库',

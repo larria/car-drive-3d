@@ -31,11 +31,68 @@ export class ExamRules {
   forwardAfterParked=false;
   dirPhase=0;
   dirPhaseStarted=false;
+  private previousPose: ExamPose | null = null;
+  private crossedFinishOutward = false;
   get phaseLabel(){return phases[this.dirPhase];}
+  private finished(p: ExamPose, corners: Point[]): boolean {
+    const { finish: [a,b], finishExitNormal: n } = this.course;
+    const distance=(q:Point)=>(q.x-a.x)*n.x+(q.z-a.z)*n.z;
+    const epsilon=1e-7,dx=b.x-a.x,dz=b.z-a.z,lengthSquared=dx*dx+dz*dz;
+    const onFinish=(q:Point)=>{
+      const along=((q.x-a.x)*dx+(q.z-a.z)*dz)/lengthSquared;
+      return along>=0&&along<=1;
+    };
+    const allowed=this.course.id!=='reverse-garage'||p.speed>=0;
+    const previous=this.previousPose;
+    this.previousPose={...p};
+    if(previous&&allowed){
+      const yawDelta=Math.atan2(Math.sin(p.yaw-previous.yaw),Math.cos(p.yaw-previous.yaw));
+      // Bound both translation and corner arc travel; never interpolate the long yaw path.
+      const radius=Math.hypot(VEHICLE.width/2,VEHICLE.length/2);
+      const steps=Math.max(1,Math.ceil((Math.hypot(p.x-previous.x,p.z-previous.z)+radius*Math.abs(yawDelta))/.02));
+      let beforeCorners=bodyCorners(previous);
+      for(let step=1;step<=steps;step++){
+        const t=step/steps;
+        const current=bodyCorners({...p,x:previous.x+(p.x-previous.x)*t,z:previous.z+(p.z-previous.z)*t,yaw:previous.yaw+yawDelta*t});
+        if(current.every(q=>distance(q)<=epsilon))this.crossedFinishOutward=false;
+        for(let i=0;i<4;i++){
+          const from=beforeCorners[i],to=current[i],before=distance(from),after=distance(to);
+          if(before<=0&&after>epsilon){
+            const fraction=-before/(after-before);
+            if(onFinish({x:from.x+fraction*(to.x-from.x),z:from.z+fraction*(to.z-from.z)}))this.crossedFinishOutward=true;
+          }
+          // A narrow marking may lie between both corner trajectories. Check the
+          // current body edge and the outward motion of its material contact point.
+          const j=(i+1)%4,end=current[j],dEnd=distance(end);
+          // Test finish endpoints inside the swept edge strip as well: an edge
+          // parallel to the finish can cross it entirely between two samples.
+          const sweptContains=(q:Point,u:Point,v:Point,w:Point)=>{
+            const cross=(r:Point,s:Point,t:Point)=>(s.x-r.x)*(t.z-r.z)-(s.z-r.z)*(t.x-r.x);
+            const area=cross(u,v,w);
+            if(Math.abs(area)<1e-12)return false;
+            const weights=[cross(q,v,w)/area,cross(u,q,w)/area,cross(u,v,q)/area];
+            return weights.every(weight=>weight>=-1e-9&&weight<=1+1e-9);
+          };
+          if(Math.min(after-before,dEnd-distance(beforeCorners[j]))>epsilon&&
+            [a,b].some(q=>sweptContains(q,from,beforeCorners[j],end)||sweptContains(q,from,end,to)))this.crossedFinishOutward=true;
+          if((after<=0&&dEnd>0)||(after>0&&dEnd<=0)){
+            const fraction=-after/(dEnd-after);
+            const contact={x:to.x+fraction*(end.x-to.x),z:to.z+fraction*(end.z-to.z)};
+            const oldContact={x:from.x+fraction*(beforeCorners[j].x-from.x),z:from.z+fraction*(beforeCorners[j].z-from.z)};
+            if(onFinish(contact)&&distance(contact)-distance(oldContact)>epsilon)this.crossedFinishOutward=true;
+          }
+        }
+        beforeCorners=current;
+      }
+    }
+    if(corners.every(q=>distance(q)<=epsilon))this.crossedFinishOutward=false;
+    return allowed&&this.crossedFinishOutward&&corners.every(q=>distance(q)>epsilon);
+  }
   reset(){
     this.startedW=false;this.totalElapsed=0;this.outsideStopped=0;
     this.parkCount=0;this.parked=false;this.reversed=false;this.forwardAfterParked=false;
     this.dirPhase=0;this.dirPhaseStarted=false;
+    this.previousPose=null;this.crossedFinishOutward=false;
   }
   step(p: ExamPose, dt=1/60): ExamResult | null {
     if(p.throttle)this.startedW=true;
@@ -77,12 +134,12 @@ export class ExamRules {
       if(valid&&!this.parked){this.parked=true;this.parkCount++;}
       else if(!valid&&this.parked)this.parked=false;
       // Garage finish ignores actual negative speed, including the tiny reverse deadband.
-      if(hits(course.finish)&&(course.id!=='reverse-garage'||p.speed>=0))
+      if(this.finished(p,corners))
         return this.parkCount>=course.requiredParks?{passed:true,reason:course.passReason}:{passed:false,reason:course.notParkedReason};
       return null;
     }
     if(course.boundaries.some(hits))return {passed:false,reason:'车辆越出边界线'};
-    if(hits(course.finish))return {passed:true,reason:course.passReason};
+    if(this.finished(p,corners))return {passed:true,reason:course.passReason};
     return null;
   }
 }
