@@ -19,8 +19,10 @@ export interface ParkingCourse extends CourseBase {
   id: 'parallel-parking' | 'reverse-garage';
   roads: Point[][];
   /** In reference element order. The dashed opening is intentionally not penalized. */
-  penaltyLines: { segment: Segment; reason: string }[];
+  penaltyLines: { segment: Segment; reason: string; kind: 'marking' | 'obstacle' }[];
   guides: Segment[];
+  /** Explicit simulation layout, not calibrated official control lines. Right then left. */
+  reverseControlLines?: { segment: Segment; normal: Point; label: string }[];
   parkZone: { minX: number; maxX: number; minZ: number; maxZ: number; heading: number; tolerance: number };
   requiredParks: number;
   notParkedReason: string;

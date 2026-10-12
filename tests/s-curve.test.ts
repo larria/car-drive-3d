@@ -30,10 +30,10 @@ describe('S rules and session isolation',()=>{
  it('waits then rejects reverse and stop, allows coasting',()=>{const r=new ExamRules(s);expect(r.step(pose())).toBeNull();expect(r.step(pose({speed:-.005}))?.reason).toContain('倒车');r.reset();expect(r.step(pose({throttle:true}))).toBeNull();expect(r.step(pose({speed:.5}))).toBeNull();expect(r.step(pose()))?.toMatchObject({passed:false,reason:'中途停车，考试不合格'});});
  it('fails crossing, prioritizes boundary over independent finish and passes correct finish',()=>{
   expect(new ExamRules(s).step(pose({x:1,z:8,speed:1}))?.reason).toContain('边界');
-  expect(new ExamRules(s).step(pose({x:23.9,z:-4.8,speed:1}))?.reason).toContain('边界');
+  const boundary=s.boundaries[s.boundaries.length-1][0];expect(new ExamRules(s).step(pose({x:boundary.x-.83,z:boundary.z+1.155,speed:1}))?.reason).toContain('边界');
   const r=new ExamRules(s);expect(r.step(pose({x:25.6066,z:-4.5,speed:1}))).toBeNull();
-  expect(r.step(pose({x:25.6066,z:-7.6566,speed:1}))).toBeNull();
-  expect(r.step(pose({x:25.6066,z:-7.7,speed:1}))).toEqual({passed:true,reason:s.passReason});
+  expect(r.step(pose({x:25.6066,z:-7.45,speed:1}))).toBeNull();
+  expect(r.step(pose({x:25.6066,z:-7.7,speed:1}))).toMatchObject({passed:true,reason:s.passReason,score:100,deductions:[]});
  });
  it('retry preserves course, pause freezes rules, switching drops latch and old result',()=>{
   const session=new ExamSession();session.select(s);session.start();session.step(pose({throttle:true,speed:1}));session.pause();session.step(pose());expect(session.result).toBeNull();session.resume();session.step(pose());expect(session.result?.passed).toBe(false);

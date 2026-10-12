@@ -35,7 +35,14 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
   check.id = 'pwa-update';
   check.textContent = '检查更新';
   check.title = `当前版本 ${__APP_VERSION__}`;
-  container.append(install, check);
+  const version = document.createElement('span');
+  version.className = 'app-version';
+  version.setAttribute('aria-label', '应用版本');
+  version.textContent = `v${__APP_VERSION__}`;
+  const updateGroup = document.createElement('span');
+  updateGroup.className = 'pwa-update-group';
+  updateGroup.append(check, version);
+  container.append(install, updateGroup);
 
   const dialog = document.createElement('dialog');
   dialog.id = 'pwa-dialog';

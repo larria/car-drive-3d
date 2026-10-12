@@ -15,13 +15,17 @@ export function reverseGarage(length: number = VEHICLE.length): ParkingCourse {
   ];
   return {
     id:'reverse-garage',name:'倒车入库',number:'04',label:'REVERSE GARAGE',
-    description:'按前进→倒车→前进→倒车→前进的方向顺序，完成两次车头朝向车道的入库停稳，再向右驶过终点。',
+    description:'按前进→倒车→前进→倒车→前进完成两次整车入库停稳。每次倒车前两前轮须越过对应模拟控制线，再向右驶过终点；控制线为模拟布局，非官方标定。',
     dimensions:`库长 ${L.toFixed(2)} m · 库宽 2.30 m · 车道宽 6.70 m · 车道长 22 m`,
     width:6.7,start:p(-7.5,0),startYaw:-Math.PI/2,startMark:seg(-8,-halfRoad,-8,halfRoad),
-    polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,reason:i===5?'碰擦库底，考试不合格':i>=3?'碰擦库侧边，考试不合格':'车辆越出边界线'})),
+    polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,kind:'marking',reason:i===5?'碰擦库底，考试不合格':i>=3?'碰擦库侧边，考试不合格':'车辆越出边界线'})),
     guides:[seg(-halfBay,halfRoad,halfBay,halfRoad),seg(-11,0,11,0)],center:[],finish:seg(9,-halfRoad,9,halfRoad),finishExitNormal:p(1,0),
     parkZone:{minX:-halfBay,maxX:halfBay,minZ:halfRoad,maxZ:bottom,heading:0,tolerance:Math.PI/12},
     bounds:boundsOf([...road,...bay]),requiredParks:2,notParkedReason:'未完成两次入库，考试不合格',
+    reverseControlLines:[
+      {segment:seg(5,-halfRoad,5,halfRoad),normal:p(1,0),label:'右模拟控制线'},
+      {segment:seg(-5,-halfRoad,-5,halfRoad),normal:p(-1,0),label:'左模拟控制线'},
+    ],
     direction:'strict',passReason:'车辆顺利通过倒车入库',
   };
 }

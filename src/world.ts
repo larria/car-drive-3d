@@ -159,7 +159,7 @@ export function createWorld(scene: THREE.Scene) {
       mesh.scale.set(Math.hypot(dx,dz),.008,.065);
       mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;island.add(mesh);
     };
-    if(parking)course.penaltyLines.forEach(({segment:[a,b],reason})=>paint(a,b,reason.startsWith('碰擦')?guideMaterial:edgeMaterial));
+    if(parking)course.penaltyLines.forEach(({segment:[a,b],kind})=>paint(a,b,kind==='obstacle'?guideMaterial:edgeMaterial));
     else course.boundaries.forEach(([a,b])=>paint(a,b));
     paint(...course.startMark,markMaterial);
     const dashed=(a:Point,b:Point,step:number,dash:number,mat:THREE.Material)=>{
@@ -170,6 +170,7 @@ export function createWorld(scene: THREE.Scene) {
     if(parking){
       paint(...course.finish,markMaterial);
       course.guides.forEach(([a,b])=>dashed(a,b,.55,.26,guideMaterial));
+      course.reverseControlLines?.forEach(({segment})=>paint(...segment,markMaterial));
       const z=course.parkZone;
       const fill=new THREE.Mesh(new THREE.PlaneGeometry(z.maxX-z.minX,z.maxZ-z.minZ),
         new THREE.MeshBasicMaterial({color:'#92ba9f',transparent:true,opacity:.12,depthWrite:false}));
@@ -195,7 +196,9 @@ export function createWorld(scene: THREE.Scene) {
     label('START',course.start.x,course.start.z+(parking?Math.sign(course.start.z)*2.5:2.5),2.6,.6);
     const [f1,f2]=course.finish;
     label('FINISH',(f1.x+f2.x)/2+(parking&&course.id==='parallel-parking'?0:3),(f1.z+f2.z)/2+(parking&&course.id==='parallel-parking'?-1:0),2.6,.6);
-    if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);}
+    if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);
+      course.reverseControlLines?.forEach(({segment:[a,b],label:text})=>label(text,(a.x+b.x)/2,(a.z+b.z)/2,2,.4));
+    }
     return island;
   }
   function setCourse(course: CourseDefinition) {

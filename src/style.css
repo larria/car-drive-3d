@@ -64,7 +64,6 @@ body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
 @media(max-height:700px) and (min-width:781px){.briefing-top{margin-top:6px}.briefing-top h1{font-size:30px}.briefing-grid{margin-top:20px}}
 
 /* Result inspection keeps the frozen driving scene unobscured. */
-.home-version{position:fixed;right:36px;bottom:49px;font-size:10px;letter-spacing:1px;color:#7a887d;font-variant-numeric:tabular-nums}
 body[data-exam="result"] main{visibility:visible;pointer-events:none}
 body[data-exam="result"] main>.intro,body[data-exam="result"] main>.model-card,body[data-exam="result"] .drive-console,body[data-exam="result"] .scene-caption,body[data-exam="result"] header{display:none}
 body[data-exam="result"] #exam-overlay{inset:auto auto 28px 28px;width:min(370px,calc(100vw - 56px));padding:0;overflow:visible;background:transparent;backdrop-filter:none;pointer-events:none}
@@ -74,4 +73,25 @@ body[data-exam="result"] #settings-running{display:none}
 .result-inspector.failed{border-left-color:#ac8160}
 .result-topline{display:flex;align-items:center;justify-content:space-between;gap:12px}.result-topline .exam-eyebrow{font-size:9px;letter-spacing:1.2px}.result-topline button{font-size:10px;min-height:32px;color:#62776a}
 .result-inspector h1{font-size:25px;font-weight:450;margin:9px 0 15px;letter-spacing:-.5px}.result-inspector .result-reason{font-size:13px;line-height:1.8;margin:0 0 13px}.inspection-note{font-size:11px;color:#728176;line-height:1.9;border-top:1px solid #d5ded1;padding-top:13px;margin:0}.result-inspector .exam-bottom-actions{margin-top:18px;justify-content:space-between;gap:8px}.result-inspector .exam-bottom-actions button{padding:12px 16px}.result-inspector.collapsed{padding:10px 18px}.result-inspector.collapsed h1{font-size:16px;margin:2px 0 4px}
-@media(max-width:780px){.home-version{right:20px;bottom:calc(43px + env(safe-area-inset-bottom))}body[data-exam="result"] #exam-overlay{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));width:calc(100vw - 24px)}.result-inspector{padding:12px 16px}.result-inspector h1{font-size:22px;margin:4px 0 9px}.result-inspector .inspection-note{font-size:10px;padding-top:9px}.result-inspector .exam-bottom-actions{margin-top:10px}body[data-exam="result"] .views{top:12px}body[data-exam="result"] .right-tools{bottom:auto;top:64px;right:12px}body[data-exam="result"] .mirror-strip{top:115px}.result-inspector .result-reason{margin-bottom:8px}}
+@media(max-width:780px){body[data-exam="result"] #exam-overlay{left:12px;bottom:calc(12px + env(safe-area-inset-bottom));width:calc(100vw - 24px)}.result-inspector{padding:12px 16px}.result-inspector h1{font-size:22px;margin:4px 0 9px}.result-inspector .inspection-note{font-size:10px;padding-top:9px}.result-inspector .exam-bottom-actions{margin-top:10px}body[data-exam="result"] .views{top:12px}body[data-exam="result"] .right-tools{bottom:auto;top:64px;right:12px}body[data-exam="result"] .mirror-strip{top:115px}.result-inspector .result-reason{margin-bottom:8px}}
+
+/* Peripheral result cue leaves the center and all observation controls untouched. */
+footer .app-version{display:inline-block;margin-left:14px;font-size:9px;letter-spacing:.5px;white-space:nowrap;font-variant-numeric:tabular-nums;color:#718174}
+body[data-result]::after{content:"";position:fixed;inset:0;z-index:7;pointer-events:none;border:1px solid rgb(var(--result-glow) / .28);box-shadow:inset 0 0 30px 5px rgb(var(--result-glow) / .24),inset 0 0 6px 1px rgb(var(--result-glow) / .3);animation:result-edge-settle .65s ease-out both}
+body[data-result="passed"]{--result-glow:94 170 119}
+body[data-result="failed"]{--result-glow:202 139 78}
+@keyframes result-edge-settle{from{opacity:.95;box-shadow:inset 0 0 55px 10px rgb(var(--result-glow) / .44),inset 0 0 9px 2px rgb(var(--result-glow) / .55)}to{opacity:1}}
+@media(max-width:780px){footer>span:last-child{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}footer .app-version{font-size:8px;margin-left:0}body[data-result]::after{box-shadow:inset 0 0 20px 3px rgb(var(--result-glow) / .24),inset 0 0 5px 1px rgb(var(--result-glow) / .3)}body[data-exam="projects"] footer,body[data-exam="briefing"] footer{padding-bottom:calc(12px + env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){body[data-result]::after{animation:none}}
+
+footer .pwa-update-group{display:inline-flex;align-items:center;gap:9px;white-space:nowrap}footer .pwa-update-group .app-version{margin-left:0}
+
+body[data-view="follow"] #viewport canvas{touch-action:none}
+.exam-score{display:block;margin-top:7px;font-size:11px;font-variant-numeric:tabular-nums}.exam-score b{font-size:18px;font-weight:650}.exam-score small{font-size:9px;color:#657769}
+.scoring-note{font-size:11px;line-height:1.9;color:#586f60;border-left:2px solid #a8bba7;padding-left:12px}
+#deduction-toast{position:fixed;left:28px;top:152px;z-index:6;max-width:320px;border-left:3px solid #ac8160;border-radius:6px;background:#f5f2e9ec;color:#694a32;padding:10px 13px;font-size:11px;line-height:1.7;pointer-events:none;box-shadow:0 4px 16px #233c3018}
+.result-score{font-size:12px;margin:8px 0}.result-score strong{font-size:24px;font-weight:550}.result-score span{font-size:10px;color:#657769;margin-left:9px}
+.deduction-list{list-style:none;padding:0;margin:10px 0;max-height:120px;overflow:auto;font-size:11px}.deduction-list li{display:flex;gap:9px;align-items:baseline;padding:6px 0;border-top:1px solid #d5ded1}.deduction-list b{color:#865c3c;white-space:nowrap}.deduction-list span{flex:1;line-height:1.6}.deduction-list small{color:#728176;font-variant-numeric:tabular-nums}
+.result-inspector:not(.collapsed){max-height:calc(100dvh - 130px);overflow:auto}
+@media(max-width:780px){#deduction-toast{left:12px;top:245px;max-width:150px;padding:8px;font-size:10px}.exam-score{margin-top:4px;font-size:10px}.exam-score b{font-size:16px}.exam-score small{display:block;font-size:8px}.deduction-list{max-height:80px}}
+

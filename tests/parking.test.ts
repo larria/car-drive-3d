@@ -68,13 +68,13 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   expect(r.step({...startParallel(),speed:-.5})?.reason).toContain('出库后不得再倒车');
  });
  it('permits garage strict forward-reverse-forward-reverse-forward and requires motion in prior phase',()=>{
-  const r=new ExamRules(garage),p=startGarage();
+  const r=new ExamRules({...garage,reverseControlLines:undefined}),p=startGarage();
   expect(r.step({...p,speed:-1})?.reason).toContain('操作顺序错误');r.reset();
   for(const [speed,phase] of [[1,0],[-1,1],[1,2],[-1,3],[1,4]] as const){expect(r.step({...p,speed})).toBeNull();expect(r.dirPhase).toBe(phase);}
   expect(r.step({...p,speed:-1})?.reason).toContain('操作顺序错误');
  });
  it('requires two separate garage parking episodes and ignores finish while speed is negative',()=>{
-  const r=new ExamRules(garage),p=parkedGarage();r.step(p);expect(r.parkCount).toBe(1);
+  const r=new ExamRules({...garage,boundaries:[],roads:[garage.roads[0],[{x:-20,z:-4},{x:20,z:-4},{x:20,z:20},{x:-20,z:20}]]}),p=parkedGarage();r.step(p);expect(r.parkCount).toBe(1);
   r.step({...p,speed:PARK_STOP_EPS});expect(r.parked).toBe(false);r.step(p);expect(r.parkCount).toBe(2);
   const finish=pose({x:9,z:0,yaw:-Math.PI/2,speed:-.001});expect(r.step(finish)).toBeNull();
   expect(r.step({...finish,speed:0})).toBeNull();
@@ -97,12 +97,12 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   expect(r.step({...p,speed:1})?.reason).toContain('30 秒');
   r.reset();r.reversed=true;expect(r.step({...p,speed:1})?.reason).toContain('倒车后');
   r.reset();r.outsideStopped=2-1/60;r.startedW=true;expect(r.step(p)?.reason).toContain('停车超 2 秒');
-  r.reset();expect(r.step({...p,x:parallel.parkZone.maxX,z:0})?.reason).toContain('边界线');
+  r.reset();expect(r.step({...p,x:parallel.parkZone.maxX,z:0,speed:1})).toBeNull();expect(r.score).toBe(90);
  });
  it('prioritizes short parking bay corners and fails finish without required parking',()=>{
   const r=new ExamRules(parallel);
   expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.minZ}))?.reason).toContain('前车');
-  expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.maxZ}))?.reason).toContain('后车');
+  r.reset();expect(r.step(pose({x:parallel.parkZone.minX+1,z:parallel.parkZone.maxZ}))?.reason).toContain('后车');
   r.reset();expect(r.step(pose({x:0,z:parallel.finish[0].z}))).toBeNull();
   expect(r.step(pose({x:0,z:parallel.finish[0].z-VEHICLE.length/2-.01}))?.reason).toContain('未完成侧方入库');
  });

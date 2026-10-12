@@ -35,7 +35,7 @@ app.innerHTML=`
 <div id="loading"><span class="loading-logo">L</span><h2>准备你的专属练习场</h2><p>正在载入精细车型与实时场景…</p></div>
 <button id="toast" type="button" role="status" aria-label="关闭提示" aria-hidden="true" tabindex="-1"></button>
 <dialog id="settings-dialog" aria-label="驾驶设置"><button class="close-dialog" type="button" aria-label="关闭设置">×</button><div class="eyebrow">DRIVE LAB / PREFERENCES</div><h2>驾驶设置</h2><p>偏好保存在本机浏览器。车辆位置和考试进度不会保存。</p><label class="setting-row"><span><strong>拟真操作</strong><small>关闭（默认）：W 前进、S 制动至停稳后倒车；倒车时 W 刹停后前进。开启：W 油门、S 纯刹车，Z / X / C 手动换档。</small></span><input id="setting-realistic" type="checkbox"></label><label class="setting-row"><span><strong>车身涂装</strong><small>即时预览，刷新后保留。</small></span><select id="setting-paint">${PAINTS.map(item=>`<option value="${item.color}">${item.name}</option>`).join('')}</select></label><label class="setting-row"><span><strong>车灯</strong></span><input id="setting-lights" type="checkbox"></label><label class="setting-row"><span><strong>渲染质量</strong></span><select id="setting-quality"><option value="high">高</option><option value="smooth">流畅</option></select></label><label class="setting-row"><span><strong>车外后视镜窗口</strong></span><input id="setting-mirrors" type="checkbox"></label><p class="settings-warning">空格及触屏刹车始终只刹车；Z / X / C 可手动选择 R / N / D，N 档仍受换挡保护。考试规则不因操作模式改变：直角和曲线禁止实际倒退，停车遵循原有方向及时间判定。运行中打开设置会暂停；关闭后请显式点击继续。</p></dialog>
-	<dialog id="help-dialog"><button class="close-dialog">×</button><div class="eyebrow">DRIVER'S GUIDE</div><h2>准备好，出发。</h2><p id="help-controls"></p><p>A / ← 左转 · D / → 右转<br>1 自由环绕 · 2 驾驶座舱 · 3 跟随视角<br>Z R档 · X N档 · C D档<br>R 复位当前项目 · Esc 暂停 / 关闭弹窗</p><p>屏幕方向盘可拖动，油门和刹车支持按住。<br>驾驶座舱中移动鼠标即可转头，触屏单指拖动。点击“锁定环视”可不受画布边缘限制连续转头，Esc 先解锁、再次按下才暂停；浏览器拒绝时继续悬停转头。双击场景或点击“回正视角”回正。<br>操作车辆自动收起无关面板，可点“显示面板”恢复。<br>座舱镜面直接显示后方，车外镜窗口可放大。切换 D / R 前请停车。</p><small>采用 cannon-es 射线车轮物理；参考场地规则判定，不设置分数。<br>后视镜采用实时后向镜像相机，并非精确光学反射。</small></dialog>
+	<dialog id="help-dialog"><button class="close-dialog">×</button><div class="eyebrow">DRIVER'S GUIDE</div><h2>准备好，出发。</h2><p id="help-controls"></p><p>A / ← 左转 · D / → 右转<br>1 自由环绕 · 2 驾驶座舱 · 3 跟随视角<br>Z R档 · X N档 · C D档<br>R 复位当前项目 · Esc 暂停 / 关闭弹窗</p><p>屏幕方向盘可拖动，油门和刹车支持按住。<br>驾驶座舱中移动鼠标即可转头，也可按住鼠标或触屏上下拖动；跟随视角支持上下拖动，偏移随车保留。点击“锁定环视”可不受画布边缘限制连续转头，Esc 先解锁、再次按下才暂停；浏览器拒绝时继续悬停转头。双击场景或点击“回正视角”回正。<br>操作车辆自动收起无关面板，可点“显示面板”恢复。<br>座舱镜面直接显示后方，车外镜窗口可放大。切换 D / R 前请停车。</p><small>采用 cannon-es 射线车轮物理；采用本项目给定规则：100 分起、80 分合格；并非已核实的官方考试规范。<br>后视镜采用实时后向镜像相机，并非精确光学反射。</small></dialog>
 <dialog id="credits-dialog"><button class="close-dialog">×</button><div class="eyebrow">ASSET CREDITS</div><h2>关于这辆车</h2><p>Ferrari 458 Italia · 原作者 vicent091036<br>模型来自 Three.js 官方汽车材质示例。<br>本项目调整材质并加入物理、视角、踏板与实时镜面。</p><p><a href="https://threejs.org/examples/webgl_materials_car.html" target="_blank" rel="noopener">Three.js 官方示例 ↗</a><br><a href="https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6" target="_blank" rel="noopener">原模型页面与许可 ↗</a></p><small>本站发布者已确认拥有模型公开发布授权。<br>模型与品牌权利归原权利人；不以开源库许可替代模型许可。</small></dialog>
 <div id="expanded-wrap" hidden><div class="expanded-head"><span id="expanded-name">后视镜</span><button id="close-expanded">关闭 ×</button></div><div id="mirror-expanded"></div><p>实时后向镜像 · 与对应小窗口相同视角</p></div>`;
 
@@ -77,7 +77,7 @@ async function init(){
   const prevPos=new THREE.Vector3();
   const drivingUi=new DrivingUi($('#focus-toggle') as HTMLButtonElement);
   const session=new ExamSession();
-  const look=new CockpitLook(renderer.domElement,()=>view==='cockpit'&&(session.state==='running'||session.state==='result'), $('#look-lock') as HTMLButtonElement, toast);
+  const look=new CockpitLook(renderer.domElement,()=>view!=='orbit'&&(session.state==='running'||session.state==='result'), $('#look-lock') as HTMLButtonElement, toast, ()=>view==='follow');
   $('#look-lock').onclick=()=>{void look.lock();renderer.domElement.focus({preventScroll:true});};
   $('#look-center').onclick=()=>{look.reset();toast('视角已回正');};
   const examUi=new ExamUi(session,action=>{
@@ -118,7 +118,7 @@ async function init(){
   ($('#setting-quality') as HTMLSelectElement).onchange=e=>changeSettings({quality:(e.target as HTMLSelectElement).value as Settings['quality']});
   ($('#setting-mirrors') as HTMLInputElement).onchange=e=>changeSettings({mirrorsExpanded:(e.target as HTMLInputElement).checked});
   $('#settings-running').onclick=openSettings;
-  function setView(next:'orbit'|'cockpit'|'follow'){if(next!==view)look.unlock();view=next;orbit.enabled=view==='orbit';look.reset();$('#look-lock').hidden=view!=='cockpit'||!matchMedia('(pointer:fine)').matches;$('#look-center').hidden=view!=='cockpit';document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'移动鼠标转头 · 双击回正':'车辆跟随 · 自由驾驶';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
+  function setView(next:'orbit'|'cockpit'|'follow'){release();view=next;orbit.enabled=view==='orbit';look.reset();$('#look-lock').hidden=view!=='cockpit'||!matchMedia('(pointer:fine)').matches;$('#look-center').hidden=view==='orbit';document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'悬停转头 · 按住上下拖动':'随车移动 · 上下拖动 · 双击回正';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
     if(view==='orbit'&&session.state!=='result'&&(session.mode==='practice'||!session.active)){const b=session.mode==='practice'?practiceBounds:session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=session.mode==='practice'?145:80;orbit.target.copy(center);camera.position.copy(center).add(session.mode==='practice'?new THREE.Vector3(-extent*.06,extent*.92,extent*.12):new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
     else if(view==='orbit'){orbit.maxDistance=16;camera.position.copy(car.root.localToWorld(new THREE.Vector3(-6,3.25,-6.6)));orbit.target.copy(car.root.position).add(new THREE.Vector3(0,.65,0));camera.fov=38;camera.updateProjectionMatrix();}
     else{camera.fov=view==='cockpit'?70:48;camera.updateProjectionMatrix();}
@@ -127,7 +127,7 @@ async function init(){
   document.querySelectorAll<HTMLElement>('[data-gear]').forEach(e=>{const key={R:'Z',N:'X',D:'C'}[e.dataset.gear!];e.title=`${e.dataset.gear} 档 (${key})`;e.innerHTML=`${e.dataset.gear}<kbd>${key}</kbd>`;e.onclick=()=>requestGear(e.dataset.gear as Gear);});
   document.querySelectorAll<HTMLElement>('[data-color]').forEach(e=>e.onclick=()=>changeSettings({paint:e.dataset.color!}));
   const release=()=>{controls.release();keys.clear();for(const name of ['throttle','brake'] as const){const el=$(`#${name}`);for(const id of held[name])if(el.hasPointerCapture(id))el.releasePointerCapture(id);held[name].clear();}const pad=$('#steering-pad');if(steeringOwner!==null&&pad.hasPointerCapture(steeringOwner))pad.releasePointerCapture(steeringOwner);steeringOwner=null;dragSteer=steerTarget=steerCurrent=0;look.unlock();};
-  window.addEventListener('blur',()=>pause('窗口已失去焦点。确认准备好后继续。'));document.addEventListener('visibilitychange',()=>{if(document.hidden)pause(`你离开了${session.mode==='practice'?'练习':'考试'}窗口。确认准备好后继续。`);});
+  window.addEventListener('blur',()=>{release();pause('窗口已失去焦点。确认准备好后继续。');});document.addEventListener('visibilitychange',()=>{if(document.hidden)pause(`你离开了${session.mode==='practice'?'练习':'考试'}窗口。确认准备好后继续。`);});
   const drivingCodes=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space']);
   const commandCodes=new Set(['KeyZ','KeyX','KeyC','Digit1','Digit2','Digit3','KeyR','Escape']);
   const textFocus=(target:EventTarget|null)=>target instanceof HTMLElement&&!!target.closest('input,textarea,select,button,a,[contenteditable],[role="textbox"],[role="button"]')&&target!==renderer.domElement;
@@ -184,7 +184,7 @@ async function init(){
     if(resolved?.rejected)toast('车辆尚未停稳，正在制动；停稳后自动换向');
     if(session.state==='running')physics.update(dt,input,()=>{
       const q=physics.chassis.quaternion;
-      if(session.mode==='exam')session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0});
+      if(session.mode==='exam')session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0,steering:physics.steering});
       if(session.state==='result'){release();examUi.render();return false;}
     });
     car.root.position.set(physics.chassis.position.x,physics.chassis.position.y-.65,physics.chassis.position.z);car.root.quaternion.set(physics.chassis.quaternion.x,physics.chassis.quaternion.y,physics.chassis.quaternion.z,physics.chassis.quaternion.w);
@@ -194,7 +194,7 @@ async function init(){
     eye.position.copy(car.root.localToWorld(car.profile.eye.clone()));eye.quaternion.copy(car.root.quaternion);eye.updateMatrixWorld();
     if(view==='orbit'){if(session.mode!=='practice'||orbit.maxDistance<=16){camera.position.add(delta);orbit.target.add(delta);}orbit.update();}
     else if(view==='cockpit'){camera.position.copy(eye.position);camera.quaternion.copy(eye.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(look.pitch,look.yaw,0,'YXZ')));}
-    else{target.copy(car.root.localToWorld(new THREE.Vector3(0,2.6,6.7)));camera.position.lerp(target,1-Math.exp(-dt*5));forward.copy(car.root.localToWorld(new THREE.Vector3(0,.7,-2)));camera.lookAt(forward);}
+    else{const angle=Math.atan2(1.9,8.7)+look.followPitch;target.copy(car.root.localToWorld(new THREE.Vector3(0,.7+Math.sin(angle)*8.9,-2+Math.cos(angle)*8.9)));camera.position.lerp(target,1-Math.exp(-dt*5));forward.copy(car.root.localToWorld(new THREE.Vector3(0,.7,-2)));camera.lookAt(forward);}
     sun.position.copy(car.root.position).add(new THREE.Vector3(-16,24,-18));sun.target.position.copy(car.root.position);
     renderer.shadowMap.autoUpdate=true;
     renderer.setRenderTarget(null);renderer.setViewport(0,0,innerWidth,innerHeight);renderer.clear();renderer.render(scene,camera);

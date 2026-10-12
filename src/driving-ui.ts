@@ -17,6 +17,7 @@ export class DrivingUi {
 export class CockpitLook {
   yaw = 0;
   pitch = 0;
+  followPitch = 0;
   private last: { x: number; y: number } | null = null;
   private touchId: number | null = null;
   private pendingLock = false;
@@ -24,9 +25,10 @@ export class CockpitLook {
   private wasLocked = false;
   private unlockingProgrammatically = false;
   constructor(private canvas: HTMLCanvasElement, private enabled: () => boolean,
-    private lockButton: HTMLButtonElement, private feedback: (message: string) => void) {
+    private lockButton: HTMLButtonElement, private feedback: (message: string) => void,
+    private follow: () => boolean = () => false) {
     canvas.addEventListener('pointerdown', e => {
-      if (e.pointerType !== 'mouse' && this.canLook(e) && this.touchId === null) {
+      if ((e.pointerType !== 'mouse' || e.button === 0) && this.canLook(e) && this.touchId === null) {
         this.touchId = e.pointerId;
         this.last = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
@@ -41,7 +43,9 @@ export class CockpitLook {
         if (e.pointerType === 'mouse') this.last = null;
         return;
       }
+      if (this.touchId !== null && e.pointerId !== this.touchId) return;
       if (e.pointerType !== 'mouse' && e.pointerId !== this.touchId) return;
+      if (this.follow() && this.touchId === null) return;
       if (this.last) this.rotate(e.clientX - this.last.x, e.clientY - this.last.y);
       this.last = { x: e.clientX, y: e.clientY };
     });
@@ -53,7 +57,7 @@ export class CockpitLook {
     }
     canvas.addEventListener('dblclick', () => { if (this.enabled()) this.reset(); });
     document.addEventListener('pointermove', e => {
-      if (!this.locked && e.pointerType === 'mouse' && (e.target !== canvas || !this.canLook(e))) this.last = null;
+      if (!this.locked && this.touchId === null && e.pointerType === 'mouse' && (e.target !== canvas || !this.canLook(e))) this.last = null;
     });
     document.addEventListener('pointerlockchange', () => {
       const locked = this.locked;
@@ -76,11 +80,15 @@ export class CockpitLook {
   }
   get locked() { return document.pointerLockElement === this.canvas; }
   private rotate(dx: number, dy: number) {
+    if (this.follow()) {
+      this.followPitch = Math.max(-.18, Math.min(.8, this.followPitch - dy * .003));
+      return;
+    }
     this.yaw = Math.max(-Math.PI, Math.min(Math.PI, this.yaw - dx * .004));
     this.pitch = Math.max(-.65, Math.min(.5, this.pitch - dy * .003));
   }
   async lock() {
-    if (!this.enabled() || this.pendingLock) return;
+    if (!this.enabled() || this.follow() || this.pendingLock) return;
     if (this.locked) { this.unlock(); return; }
     if (!this.canvas.requestPointerLock) { this.feedback('当前浏览器不支持锁定环视，仍可移动鼠标转头'); return; }
     this.pendingLock = true;
@@ -118,8 +126,9 @@ export class CockpitLook {
     });
   }
   resetPointer() {
-    if (this.touchId !== null && this.canvas.hasPointerCapture(this.touchId)) this.canvas.releasePointerCapture(this.touchId);
+    const id = this.touchId;
     this.last = null; this.touchId = null;
+    if (id !== null && this.canvas.hasPointerCapture(id)) this.canvas.releasePointerCapture(id);
   }
-  reset() { this.yaw = this.pitch = 0; this.resetPointer(); }
+  reset() { this.yaw = this.pitch = this.followPitch = 0; this.resetPointer(); }
 }

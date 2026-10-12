@@ -7,33 +7,44 @@ import { REVERSE_GARAGE } from '../src/courses/reverse-garage';
 import type { DrivingCourse } from '../src/courses/course-definition';
 const course:DrivingCourse={...RIGHT_ANGLE,boundaries:[],finish:[{x:0,z:-2},{x:0,z:2}],finishExitNormal:{x:1,z:0}};
 const pose=(x:number,z=0,yaw=-Math.PI/2):ExamPose=>({x,z,yaw,speed:1,throttle:false});
-describe('finite outward finish traversal',()=>{
+// Model-matched rear wheel center 1.495m behind the origin, radius .35m.
+const rearClearance=1.495+.35;
+describe('finite outward rear-wheel finish traversal',()=>{
  it('declares explicit exit normals for all four courses',()=>{
   expect(RIGHT_ANGLE.finishExitNormal).toEqual({x:1,z:0});
   expect(REVERSE_GARAGE.finishExitNormal).toEqual({x:1,z:0});
   expect(S_CURVE.finishExitNormal).toEqual({x:0,z:-1});
   expect(PARALLEL_PARKING.finishExitNormal).toEqual({x:0,z:-1});
  });
- it('does not pass front contact, center crossing or rear contact',()=>{
+ it('waits for both complete rear wheel projections, including exact contact',()=>{
   const r=new ExamRules(course);
-  for(const x of [-3,-2.05,-2,0,2.05])expect(r.step(pose(x))).toBeNull();
-  expect(r.step(pose(2.05001))?.passed).toBe(true);
+  for(const x of [-3,-2.05,0,1.495,rearClearance])expect(r.step(pose(x))).toBeNull();
+  const exit=pose(rearClearance+.00001);
+  expect(bodyCorners(exit).some(p=>p.x<0)).toBe(true);
+  expect(r.step(exit)?.passed).toBe(true);
  });
- it('uses all rotated corners rather than just center or nominal rear',()=>{
+ it('does not pass while the yawed trailing rear wheel is still inside',()=>{
   const r=new ExamRules(course),yaw=-Math.PI/4;
-  expect(r.step(pose(-3,0,yaw))).toBeNull();expect(r.step(pose(1.5,0,yaw))).toBeNull();
-  expect(bodyCorners(pose(1.5,0,yaw)).some(p=>p.x<0)).toBe(true);
-  expect(r.step(pose(3,0,yaw))?.passed).toBe(true);
+  // Farther rear center is (1.495+.82)/sqrt(2) inside the origin;
+  // its rotated tire projects another (.35+.11)/sqrt(2) along X.
+  const threshold=(1.495+.82+.35+.11)/Math.sqrt(2);
+  expect(r.step(pose(-3,0,yaw))).toBeNull();
+  expect(r.step(pose(1.5,0,yaw))).toBeNull();
+  expect(r.step(pose(threshold-.00001,0,yaw))).toBeNull();
+  expect(r.step(pose(threshold+.00001,0,yaw))?.passed).toBe(true);
  });
- it('detects a whole-body one-step jump across the finite finish',()=>{
+ it('detects real rear wheel projections during a one-step jump',()=>{
   const r=new ExamRules(course);expect(r.step(pose(-4))).toBeNull();expect(r.step(pose(4))?.passed).toBe(true);
  });
- it('tracks a finite marking in the middle of an edge, between corner paths',()=>{
+ it('rejects a narrow line between rear tires, not a fictitious axle crossing',()=>{
   const narrow={...course,finish:[{x:0,z:-.05},{x:0,z:.05}] as DrivingCourse['finish']};
-  const r=new ExamRules(narrow);expect(r.step(pose(-4))).toBeNull();expect(r.step(pose(4))?.passed).toBe(true);
-  const inward=new ExamRules(narrow);inward.step(pose(4));expect(inward.step(pose(-4))).toBeNull();
+  const r=new ExamRules(narrow);expect(r.step(pose(-4))).toBeNull();expect(r.step(pose(4))).toBeNull();
  });
- it('tracks outward corner arcs during rotation without center translation',()=>{
+ it('detects a finite line within the tire width between corner trajectories',()=>{
+  const narrow={...course,finish:[{x:0,z:.80},{x:0,z:.84}] as DrivingCourse['finish']};
+  const r=new ExamRules(narrow);expect(r.step(pose(-4))).toBeNull();expect(r.step(pose(4))?.passed).toBe(true);
+ });
+ it('tracks actual rear wheel arcs during rotation without center translation',()=>{
   const r=new ExamRules(course);expect(r.step(pose(1.5,0,-Math.PI/2))).toBeNull();
   expect(r.step(pose(1.5,0,0))?.passed).toBe(true);
  });
@@ -49,11 +60,11 @@ describe('finite outward finish traversal',()=>{
   expect(r.step(pose(4,0))).toBeNull();
  });
  it('cannot reuse crossing evidence after reset or a full return inside',()=>{
-  const r=new ExamRules(course);r.step(pose(-4));r.step(pose(0));r.reset();expect(r.step(pose(4))).toBeNull();
-  r.step(pose(-4));r.step(pose(0));r.step(pose(-4));
+  const r=new ExamRules(course);r.step(pose(-4));r.step(pose(1.5));r.reset();expect(r.step(pose(4))).toBeNull();
+  r.step(pose(-4));r.step(pose(1.5));r.step(pose(-4));
   r.step(pose(-4,5));expect(r.step(pose(4,5))).toBeNull();
  });
- it('keeps boundary and reverse failures ahead of an otherwise completed exit',()=>{
+ it('keeps wheel-boundary and reverse failures ahead of an otherwise completed exit',()=>{
   const r=new ExamRules({...course,boundaries:[[{x:4,z:-2},{x:4,z:2}]]});
   r.step(pose(-4));expect(r.step(pose(4))?.reason).toContain('边界');
   const reverse=new ExamRules(course);reverse.step(pose(-4));expect(reverse.step({...pose(4),speed:-1})?.reason).toContain('倒车');

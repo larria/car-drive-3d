@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es';
-import { VEHICLE } from './vehicle-config';
+import { VEHICLE, WHEEL_POSITIONS, WHEEL_RADIUS } from './vehicle-config';
 
 export type Gear = 'D' | 'N' | 'R';
 export interface DrivingInput {
@@ -56,15 +56,11 @@ export class DrivingPhysics {
       indexUpAxis: 1,
       indexForwardAxis: 2,
     });
-    const positions = [
-      [-0.84, -0.29, VEHICLE.frontAxle], [0.83, -0.29, VEHICLE.frontAxle],
-      [-0.82, -0.29, VEHICLE.rearAxle], [0.82, -0.29, VEHICLE.rearAxle],
-    ];
-    positions.forEach(([x, y, z], index) => this.vehicle.addWheel({
+    WHEEL_POSITIONS.forEach(({x, y, z}, index) => this.vehicle.addWheel({
       chassisConnectionPointLocal: new CANNON.Vec3(x, y, z),
       directionLocal: new CANNON.Vec3(0, -1, 0),
       axleLocal: new CANNON.Vec3(1, 0, 0),
-      radius: 0.35,
+      radius: WHEEL_RADIUS,
       suspensionRestLength: 0.12,
       maxSuspensionTravel: 0.16,
       suspensionStiffness: 30,

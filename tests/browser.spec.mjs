@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
-import {writeFileSync} from 'node:fs';
-const open=async page=>{await page.goto('http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);};
+import {writeFileSync,readFileSync} from 'node:fs';
+const version=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')).version;
+const open=async page=>{await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await page.waitForTimeout(750);};
 const start=async page=>{await page.locator('[data-exam="select"]').click();await page.locator('[data-exam="start"]').click();};
 const startS=async page=>{await page.locator('[data-exam="select:s-curve"]').click();await page.locator('[data-exam="start"]').click();};
 const state=page=>page.evaluate(()=>window.larria.session.state);
@@ -37,7 +38,7 @@ test('complete actual driving pass using only held keyboard and screen steering'
   const steer=turning?(straight?Math.max(-1,Math.min(1,(-Math.PI/2-p.yaw)*3)):-1):Math.max(-.4,Math.min(.4,(p.x+.65)*.6-p.yaw*2));
   await page.mouse.move(cx-steer*95,cy);await page.waitForTimeout(18);
  }
- await page.keyboard.up('w');await page.mouse.up();await expect(page.locator('.result-inspector h1')).toHaveText('✓ 考试通过');await page.screenshot({path:'artifacts/exam-pass.png'});
+ await page.keyboard.up('w');await page.mouse.up();await expect(page.locator('.result-inspector h1')).toHaveText('✓ 考试通过');await expect(page.locator('body')).toHaveAttribute('data-result','passed');await page.screenshot({path:'artifacts/exam-pass.png'});
  const frozen=await pos(page);await page.keyboard.down('w');await page.waitForTimeout(300);await page.keyboard.up('w');expect(await pos(page)).toEqual(frozen);
  await page.locator('[data-exam="retry"]:visible').click();expect((await pos(page))[2]).toBe(9);expect(await page.evaluate(()=>window.larria.session.rules.startedW)).toBe(false);
 });
@@ -221,14 +222,33 @@ test('all courses preserve selected view on failure and success retry with match
 
 
 test('result inspection preserves frozen scene and permits only observation',async({page})=>{
- await open(page);await expect(page.locator('.home-version')).toHaveText('v1.2.2');await start(page);
+ await open(page);await expect(page.locator('footer .app-version')).toHaveText(`v${version}`);await start(page);
  await page.keyboard.down('s');await expect(page.locator('.result-inspector')).toBeVisible();await page.keyboard.up('s');
  await expect(page.locator('#throttle')).toBeHidden();await expect(page.locator('button[data-view="orbit"]')).toBeVisible();
  const snapshot=()=>page.evaluate(()=>({position:window.larria.physics.chassis.position.toArray(),gear:window.larria.physics.gear,time:window.larria.session.rules.totalElapsed}));const frozen=await snapshot();
- await page.locator('[data-exam="result-toggle"]').click();await expect(page.locator('.result-content')).toBeHidden();
+ await page.locator('[data-exam="result-toggle"]').click();await expect(page.locator('.result-content')).toBeHidden();await expect(page.locator('body')).toHaveAttribute('data-result','failed');
+ await page.emulateMedia({reducedMotion:'reduce'});expect(await page.evaluate(()=>getComputedStyle(document.body,'::after').animationName)).toBe('none');expect(await page.evaluate(()=>getComputedStyle(document.body,'::after').pointerEvents)).toBe('none');
  await page.keyboard.press('1');await expect.poll(()=>page.evaluate(()=>window.larria.view)).toBe('orbit');await page.mouse.move(700,400);await page.mouse.wheel(0,-100);
  await page.keyboard.press('2');await page.mouse.move(600,400);await page.mouse.move(780,440,{steps:6});expect(Math.abs(await page.evaluate(()=>window.larria.look.yaw))).toBeGreaterThan(.1);
  await page.keyboard.down('w');await page.keyboard.press('z');await page.waitForTimeout(250);await page.keyboard.up('w');expect(await snapshot()).toEqual(frozen);
  await page.setViewportSize({width:390,height:844});await page.locator('[data-exam="result-toggle"]').click();await expect(page.locator('[data-exam="retry"]:visible')).toBeInViewport();
- await page.locator('[data-exam="retry"]:visible').click();expect(await state(page)).toBe('running');expect(await page.evaluate(()=>window.larria.view)).toBe('cockpit');
+ await page.locator('[data-exam="retry"]:visible').click();expect(await state(page)).toBe('running');expect(await page.evaluate(()=>document.body.dataset.result)).toBeUndefined();expect(await page.evaluate(()=>window.larria.view)).toBe('cockpit');
 });
+
+ test('vertical drag persists in follow and cockpit, clamps, resets and works in frozen result',async({page})=>{
+  await open(page);await start(page);
+  await page.mouse.move(710,400);await page.mouse.down();await page.mouse.move(710,500,{steps:5});await page.mouse.up();
+  expect(await page.evaluate(()=>window.larria.look.pitch)).toBeLessThan(-.1);
+  await page.locator('button[data-view="follow"]').click();
+  await page.mouse.move(710,470);await page.mouse.down();await page.mouse.move(710,360,{steps:6});await page.mouse.up();
+  const offset=await page.evaluate(()=>window.larria.look.followPitch);expect(offset).toBeGreaterThan(.1);
+  await page.waitForTimeout(400);expect(await page.evaluate(()=>window.larria.look.followPitch)).toBe(offset);
+  await page.locator('#look-center').click();expect(await page.evaluate(()=>window.larria.look.followPitch)).toBe(0);
+  await page.mouse.move(710,430);await page.mouse.down();await page.mouse.move(710,-800,{steps:4});await page.mouse.up();
+  expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeLessThanOrEqual(.8);
+  await page.keyboard.down('s');await expect.poll(()=>state(page)).toBe('result');await page.keyboard.up('s');
+  const frozen=await pos(page);await page.locator('#look-center').click();
+  await page.mouse.move(710,430);await page.mouse.down();await page.mouse.move(710,350,{steps:4});await page.mouse.up();
+  expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeGreaterThan(.1);expect(await pos(page)).toEqual(frozen);
+  await expect(page.locator('.result-score')).toContainText('0');await expect(page.locator('.deduction-list')).toContainText('100');
+ });
