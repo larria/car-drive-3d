@@ -85,8 +85,9 @@ PLAYWRIGHT_CHANNEL=chrome npm run test:browser:all
 
 - 仓库：https://github.com/larria/car-drive-3d
 - 站点：https://larria.github.io/car-drive-3d/
-- 推送 main 后 GitHub Actions 依次执行 `npm ci`、单元测试、生产构建、`npx playwright install --with-deps chromium` 和 `npm run test:browser:all`（主浏览器/设置/PWA）后部署；任一测试失败阻止部署。仅缓存 npm 下载，不缓存浏览器或旧 dist；失败保留诊断文件 7 天。Pages Source 使用 GitHub Actions。
-- 版本 tag 使用 `v1.0.0` 起的语义化版本；后续发布修改 package.json 版本并提交即可触发 SW 内容更新。
+- Pages Source 使用 **Deploy from a branch → gh-pages → / (root)**。本地验证后执行 `npm run deploy`，Vite 构建并通过 `gh-pages` 上传完整 `dist`（含模型、Draco、PWA 和 `.nojekyll`）。GitHub 自身仍会执行分支 Pages 发布任务，但不再依赖项目自定义 CI 的浏览器检查。
+- 推送 main 后 GitHub Actions 仅独立执行单测、构建和 Chromium 浏览器/设置/PWA 检查，失败保留诊断文件 7 天；检查失败不再阻塞分支发布，发布者须如实记录验证状态，不将未通过测试称为成功。
+- 发布前递增 package.json 的正式版本、提交源代码并打对应 `vX.Y.Z` 标签；推送 main **不会自动发布**，需执行 `npm run deploy`，并核实线上版本、功能及 SW 更新。
 
 ## 用户给定评分规则
 
