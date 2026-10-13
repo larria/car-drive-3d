@@ -37,7 +37,7 @@ body[data-look-locked="true"] #look-lock{background:#355343;color:#f7f7ed}
 .practice-map span:last-child{font-size:9px}
 #toast.show{pointer-events:auto;cursor:url('./assets/cursors/click.svg') 9 2,pointer}
 #toast{border:1px solid #a4bba645;text-align:left;max-width:min(420px,90vw);white-space:normal;line-height:1.5;box-shadow:0 8px 28px #1c352440}
-.project-settings{margin-top:12px;min-height:40px;padding:10px 16px}
+.project-page{position:relative;container-type:inline-size}.project-page>.exam-eyebrow{padding-right:52px;min-height:20px}.project-settings{position:absolute;right:0;top:-12px;display:grid;place-items:center;width:44px;height:44px;padding:0;margin:0;border:1px solid #c5d1c2;border-radius:12px;background:#f5f5ee;color:#526c59;transition:background .15s,border-color .15s}.project-settings svg{width:20px;height:20px}.project-settings:hover{background:#e5ecdf;border-color:#78917a}
 /* Visible, brand-toned scrollbars for every scroll container, including Firefox. */
 *{scrollbar-width:thin;scrollbar-color:#829685 #e4e9de}
 *::-webkit-scrollbar{width:9px;height:9px}
@@ -154,7 +154,9 @@ body[data-view="follow"] #viewport canvas{touch-action:none}
 
 
 /* Six entrances share one hierarchy; thumbnails reuse the briefing's course geometry. */
-.single-projects{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.home-project-grid{display:grid;grid-template-columns:1fr;gap:16px}
+@container(min-width:716px){.home-project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container(min-width:1082px){.home-project-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .project-card,.mode-card{text-align:left;min-width:0;border:1px solid #c5d1c2;border-radius:13px;background:#f5f5ee;padding:22px;position:relative;overflow:hidden}
 .project-card:hover,.mode-card:hover{background:#e5ecdf;border-color:#78917a}
 .project-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,42%);align-items:center;gap:12px;min-height:215px}
@@ -167,7 +169,6 @@ body[data-view="follow"] #viewport canvas{touch-action:none}
 .project-thumbnail{display:flex;align-items:center;justify-content:center;min-width:0;color:#355343}
 .project-thumbnail .course-diagram{display:block;width:100%;height:175px;margin:0;max-width:190px}
 .project-thumbnail .course-diagram text{font-size:10px}
-.project-modes{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-top:20px}
 .mode-card{padding:26px;display:flex;flex-direction:column;min-height:220px}
 .mode-series{background:#dfe8da;border-color:#9db49f;border-left:4px solid #527b65}
 .mode-series h2{font-size:29px}.mode-note{font-size:11px;color:#526c59;display:block;margin-bottom:22px}.mode-practice{background:#eeefe8}
@@ -176,8 +177,8 @@ body[data-view="follow"] #viewport canvas{touch-action:none}
 #parking-step strong,#parking-success strong{font-size:12px;font-weight:600}#parking-step p,#parking-success p{font-size:11px;line-height:1.6;margin:4px 0 0;color:#536b59}
 .step-index{font-size:11px;line-height:20px;font-variant-numeric:tabular-nums;border-right:1px solid #c5d2bf;padding-right:10px;white-space:nowrap}.parking-check{font-size:19px;line-height:23px}
 @media(min-width:481px) and (max-width:900px){.project-card{grid-template-columns:minmax(0,1fr) 100px;gap:8px}.project-thumbnail .course-diagram{height:145px}.project-card h2{font-size:21px}}
-@media(max-width:780px){.project-modes{grid-template-columns:1fr}.project-card{padding:18px}.mode-card{padding:22px;min-height:205px}#parking-step,#parking-success{left:12px;max-width:min(205px,calc(100vw - 24px));padding:8px 10px;gap:7px}#parking-step{top:200px}#parking-success{top:275px}#parking-step strong,#parking-success strong{font-size:11px}#parking-step p,#parking-success p{font-size:10px}#deduction-toast{top:275px}}
-@media(max-width:480px){.single-projects{grid-template-columns:1fr;gap:10px}.project-card{grid-template-columns:minmax(0,1fr) 105px;gap:8px;min-height:165px;padding:17px 14px}.project-card h2{margin:14px 0 6px;font-size:22px}.project-description{margin-bottom:10px;font-size:11px}.project-thumbnail .course-diagram{height:135px}.project-card .project-link{font-size:10px}.project-heading h1{font-size:32px}.project-heading{margin:18px 0 22px}.mode-series h2{font-size:27px}.card-number{font-size:9px;letter-spacing:1px}}
+@media(max-width:780px){.home-project-grid{gap:12px}.project-card{padding:18px}.mode-card{padding:22px;min-height:205px}#parking-step,#parking-success{left:12px;max-width:min(205px,calc(100vw - 24px));padding:8px 10px;gap:7px}#parking-step{top:200px}#parking-success{top:275px}#parking-step strong,#parking-success strong{font-size:11px}#parking-step p,#parking-success p{font-size:10px}#deduction-toast{top:275px}}
+@media(max-width:480px){.home-project-grid{gap:10px}.project-card{grid-template-columns:minmax(0,1fr) 105px;gap:8px;min-height:165px;padding:17px 14px}.project-card h2{margin:14px 0 6px;font-size:22px}.project-description{margin-bottom:10px;font-size:11px}.project-thumbnail .course-diagram{height:135px}.project-card .project-link{font-size:10px}.project-heading h1{font-size:32px}.project-heading{margin:18px 0 22px}.mode-series h2{font-size:27px}.card-number{font-size:9px;letter-spacing:1px}}
 @media(max-height:600px){.project-heading{margin:14px 0 20px}.project-heading h1{font-size:32px;margin-bottom:10px}.project-heading p{margin:8px 0}.project-settings{margin-top:5px}.project-card{min-height:200px}}
 @media(max-height:500px) and (min-width:481px){#parking-step{top:100px;max-width:245px;padding:7px 10px}#parking-success{top:168px;max-width:245px;padding:7px 10px}#deduction-toast{top:168px}.project-heading h1 br{display:none}.project-heading p br{display:none}.season-note{display:none}}
 @media(max-width:480px) and (max-height:600px){.project-card{min-height:165px}}

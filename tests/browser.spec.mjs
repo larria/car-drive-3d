@@ -311,18 +311,18 @@ test('series confirmation and whole-round R; single hides scores',async({page})=
 });
 
 
-test('six entrances follow four equal singles then prominent series and free across responsive sizes',async({page})=>{
+test('homepage six entrances follow series, four equal singles and free across responsive sizes',async({page})=>{
  await open(page);
- const entrances=page.locator('.single-projects button, .project-modes button');
- expect(await entrances.evaluateAll(els=>els.map(el=>el.dataset.exam))).toEqual(['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:series','select:practice']);
+ const entrances=page.locator('.home-project-grid button');
+ expect(await entrances.evaluateAll(els=>els.map(el=>el.dataset.exam))).toEqual(['select:series','select','select:s-curve','select:parallel-parking','select:reverse-garage','select:practice']);
  await expect(page.locator('.project-page')).not.toContainText('已开放');
  await expect(page.locator('.mode-series')).toContainText('80 分合格');
  await expect(page.locator('.mode-practice')).toContainText('不评分');
- await page.locator('[data-exam="select"]').focus();
- for(const id of ['select:s-curve','select:parallel-parking','select:reverse-garage','select:series','select:practice']){await page.keyboard.press('Tab');await expect(page.locator(`[data-exam="${id}"]`)).toBeFocused();}
- for(const [width,height,columns] of [[1440,900,2],[1024,768,2],[768,900,2],[480,800,1],[375,812,1],[320,640,1],[844,390,2]]){
+ await page.locator('[data-exam="select:series"]').focus();
+ for(const id of ['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:practice']){await page.keyboard.press('Tab');await expect(page.locator(`[data-exam="${id}"]`)).toBeFocused();}
+ for(const [width,height,columns] of [[1440,900,3],[1024,768,2],[768,900,2],[480,800,1],[375,812,1],[320,640,1],[844,390,2]]){
   await page.setViewportSize({width,height});
-  expect(await page.locator('.single-projects').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(columns);
+  expect(await page.locator('.home-project-grid').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(columns);
   const sizes=await page.locator('.project-card').evaluateAll(els=>els.map(el=>Math.round(el.getBoundingClientRect().width)));expect(new Set(sizes).size).toBe(1);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(width);
   await page.locator('#exam-overlay').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('[data-exam="select:practice"]')).toBeInViewport();
@@ -370,3 +370,10 @@ test('parking rule steps and success event remain cockpit-visible without steali
  }
  await start(page);await expect(page.locator('#parking-step')).toBeHidden();await expect(page.locator('#parking-success')).toBeHidden();
 });
+
+ test('homepage settings gear opens driving settings and initial focus is continuous exam',async({page})=>{
+ await page.goto(process.env.E2E_URL || 'http://127.0.0.1:5173');await page.waitForFunction(()=>window.larria?.ready);await expect(page.locator('#loading')).toBeHidden();
+ await expect(page.locator('[data-exam="select:series"]')).toBeFocused();
+ const settings=page.getByRole('button',{name:'驾驶设置',exact:true});await expect(settings).toHaveAttribute('title','驾驶设置');await expect(settings.locator('svg')).toHaveCount(1);
+ const box=await settings.boundingBox();expect(box.width).toBe(44);expect(box.height).toBe(44);await settings.click();await expect(page.locator('#settings-dialog')).toBeVisible();
+ });
