@@ -17,6 +17,11 @@ export interface Settings {
   headlights: boolean;
   quality: 'high' | 'smooth';
   mirrorsExpanded: boolean;
+  audioEnabled: boolean;
+  masterVolume: number;
+  musicVolume: number;
+  vehicleVolume: number;
+  cuesVolume: number;
 }
 export const DEFAULT_SETTINGS: Settings = {
   maxSpeeds: SPEED_DEFAULTS,
@@ -25,6 +30,11 @@ export const DEFAULT_SETTINGS: Settings = {
   headlights: false,
   quality: 'high',
   mirrorsExpanded: true,
+  audioEnabled: true,
+  masterVolume: 0.7,
+  musicVolume: 0.35,
+  vehicleVolume: 0.65,
+  cuesVolume: 0.8,
 };
 export const SETTINGS_KEY = 'larria.settings.v1';
 
@@ -39,6 +49,11 @@ export function validateSettings(value: unknown): Settings {
   if (typeof record.headlights === 'boolean') result.headlights = record.headlights;
   if (record.quality === 'high' || record.quality === 'smooth') result.quality = record.quality;
   if (typeof record.mirrorsExpanded === 'boolean') result.mirrorsExpanded = record.mirrorsExpanded;
+  if (typeof record.audioEnabled === 'boolean') result.audioEnabled = record.audioEnabled;
+  for (const key of ['masterVolume', 'musicVolume', 'vehicleVolume', 'cuesVolume'] as const) {
+    const volume = record[key];
+    if (typeof volume === 'number' && Number.isFinite(volume)) result[key] = Math.max(0, Math.min(1, volume));
+  }
   const speeds = record.maxSpeeds as Record<string, unknown> | undefined;
   if (speeds && typeof speeds === 'object' && !Array.isArray(speeds)) {
     for (const key of Object.keys(SPEED_DEFAULTS) as SpeedCourse[]) {

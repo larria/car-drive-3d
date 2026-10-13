@@ -17,6 +17,8 @@ import {createSettingsStore, PAINTS, type Settings, SPEED_DEFAULTS, SPEED_MIN, s
 import {DrivingControls} from './driving-controls';
 import {practiceBounds} from './practice-layout';
 import {ParkingFeedback} from './parking-feedback';
+import {createAudioController, gearAudioEvent, type AudioEvent} from './audio';
+import {isParkingCourse} from './courses/course-definition';
 
 const settingsStore=createSettingsStore();
 const app=document.querySelector<HTMLDivElement>('#app')!;
@@ -35,7 +37,7 @@ app.innerHTML=`
 </main>
 <div id="loading"><span class="loading-logo">L</span><h2>准备你的专属练习场</h2><p>正在载入精细车型与实时场景…</p></div>
 <button id="toast" type="button" role="status" aria-label="关闭提示" aria-hidden="true" tabindex="-1"></button>
-<dialog id="settings-dialog" aria-labelledby="settings-title" aria-describedby="settings-description"><div class="settings-header"><div><div class="eyebrow">DRIVE LAB / PREFERENCES</div><h2 id="settings-title">驾驶设置</h2></div><button class="close-dialog" type="button" aria-label="关闭设置" autofocus>×</button></div><div class="settings-body"><p id="settings-description">设置即时生效并自动保存在本机浏览器，无需点击保存。车辆位置和考试进度不会保存。四项考试默认 6 km/h，自由练习默认 15 km/h；最低均为 3 km/h。侧方位停车限时 90 秒，倒车入库限时 210 秒，可自行提高最高速度。</p><label class="setting-row"><span><strong>拟真操作</strong><small>关闭（默认）：W 前进、S 制动至停稳后倒车；倒车时 W 刹停后前进。开启：W 油门、S 纯刹车，Z / X / C 手动换档。</small></span><input id="setting-realistic" type="checkbox"></label><label class="setting-row"><span><strong>车身涂装</strong><small>即时预览，刷新后保留。</small></span><select id="setting-paint">${PAINTS.map(item=>`<option value="${item.color}">${item.name}</option>`).join('')}</select></label><label class="setting-row"><span><strong>车灯</strong></span><input id="setting-lights" type="checkbox"></label><label class="setting-row"><span><strong>渲染质量</strong></span><select id="setting-quality"><option value="high">高</option><option value="smooth">流畅</option></select></label><label class="setting-row"><span><strong>车外后视镜窗口</strong></span><input id="setting-mirrors" type="checkbox"></label>${Object.keys(SPEED_DEFAULTS).map(id=>`<label class="setting-row setting-speed"><span><strong>${id==='practice'?'自由练习':getCourse(id).name}最高速度</strong><small>${SPEED_MIN}–${speedMax(id as SpeedCourse)} km/h</small></span><span class="speed-control"><input id="speed-${id}" data-speed-course="${id}" type="range" min="${SPEED_MIN}" max="${speedMax(id as SpeedCourse)}" step="1"><output for="speed-${id}"></output></span></label>`).join('')}<p class="settings-warning">空格及触屏刹车始终只刹车；Z / X / C 可手动选择 R / N / D，N 档仍受换挡保护。考试规则不因操作模式改变：直角和曲线禁止实际倒退，停车遵循原有方向及时间判定。运行中打开设置会暂停；关闭后请显式点击继续。</p></div></dialog>
+<dialog id="settings-dialog" aria-labelledby="settings-title" aria-describedby="settings-description"><div class="settings-header"><div><div class="eyebrow">DRIVE LAB / PREFERENCES</div><h2 id="settings-title">驾驶设置</h2></div><button class="close-dialog" type="button" aria-label="关闭设置" autofocus>×</button></div><div class="settings-body"><p id="settings-description">设置即时生效并自动保存在本机浏览器，无需点击保存。车辆位置和考试进度不会保存。四项考试默认 6 km/h，自由练习默认 15 km/h；最低均为 3 km/h。侧方位停车限时 90 秒，倒车入库限时 210 秒，可自行提高最高速度。</p><label class="setting-row"><span><strong>拟真操作</strong><small>关闭（默认）：W 前进、S 制动至停稳后倒车；倒车时 W 刹停后前进。开启：W 油门、S 纯刹车，Z / X / C 手动换档。</small></span><input id="setting-realistic" type="checkbox"></label><label class="setting-row"><span><strong>车身涂装</strong><small>即时预览，刷新后保留。</small></span><select id="setting-paint">${PAINTS.map(item=>`<option value="${item.color}">${item.name}</option>`).join('')}</select></label><label class="setting-row"><span><strong>车灯</strong></span><input id="setting-lights" type="checkbox"></label><label class="setting-row"><span><strong>渲染质量</strong></span><select id="setting-quality"><option value="high">高</option><option value="smooth">流畅</option></select></label><label class="setting-row"><span><strong>车外后视镜窗口</strong></span><input id="setting-mirrors" type="checkbox"></label>${Object.keys(SPEED_DEFAULTS).map(id=>`<label class="setting-row setting-speed"><span><strong>${id==='practice'?'自由练习':getCourse(id).name}最高速度</strong><small>${SPEED_MIN}–${speedMax(id as SpeedCourse)} km/h</small></span><span class="speed-control"><input id="speed-${id}" data-speed-course="${id}" type="range" min="${SPEED_MIN}" max="${speedMax(id as SpeedCourse)}" step="1"><output for="speed-${id}"></output></span></label>`).join('')}<section class="settings-audio" aria-labelledby="audio-title"><h3 id="audio-title">声音与氛围</h3><p>原创合成音乐与机械声，非真实车型录音。首次点击后启用；考试驾驶不播放音乐，视觉提示始终保留。</p><label class="setting-row"><span><strong>启用声音</strong><small>关闭后所有声道静音。</small></span><input id="setting-audio" type="checkbox"></label>${[['masterVolume','总音量'],['musicVolume','氛围音乐'],['vehicleVolume','车辆声音'],['cuesVolume','提示音']].map(([key,label])=>`<label class="setting-row setting-speed"><span><strong>${label}</strong></span><span class="speed-control"><input id="audio-${key}" data-audio-volume="${key}" type="range" min="0" max="1" step="0.01"><output for="audio-${key}"></output></span></label>`).join('')}<button id="audio-preview" type="button" class="text-button">试听提示音</button><p id="audio-status" role="status">声音需浏览器允许播放；可随时静音。</p></section><p class="settings-warning">空格及触屏刹车始终只刹车；Z / X / C 可手动选择 R / N / D，N 档仍受换挡保护。考试规则不因操作模式改变：直角和曲线禁止实际倒退，停车遵循原有方向及时间判定。运行中打开设置会暂停；关闭后请显式点击继续。</p></div></dialog>
 	<dialog id="help-dialog"><button class="close-dialog">×</button><div class="eyebrow">DRIVER'S GUIDE</div><h2>准备好，出发。</h2><p id="help-controls"></p><p>A / ← 左转 · D / → 右转<br>1 自由环绕 · 2 驾驶座舱 · 3 跟随视角<br>Z R档 · X N档 · C D档<br>R <span id="help-retry">复位当前项目</span> · Esc 暂停 / 关闭弹窗</p><p>屏幕方向盘可拖动，油门和刹车支持按住。<br>驾驶座舱中移动鼠标即可转头，也可按住鼠标或触屏上下拖动；跟随视角支持上下拖动，偏移随车保留。点击“锁定环视”可不受画布边缘限制连续转头，Esc 先解锁、再次按下才暂停；浏览器拒绝时继续悬停转头。双击场景或点击“回正视角”回正。<br>操作车辆自动收起无关面板，可点“显示面板”恢复。<br>座舱镜面直接显示后方，车外镜窗口可放大。切换 D / R 前请停车。</p><small>采用 cannon-es 射线车轮物理；<span id="help-scoring">采用本项目给定规则，单项只显示通过或失败及原因；</span>并非已核实的官方考试规范。<br>后视镜采用实时后向镜像相机，并非精确光学反射。</small></dialog>
 <dialog id="credits-dialog"><button class="close-dialog">×</button><div class="eyebrow">ASSET CREDITS</div><h2>关于这辆车</h2><p>Ferrari 458 Italia · 原作者 vicent091036<br>模型来自 Three.js 官方汽车材质示例。<br>本项目调整材质并加入物理、视角、踏板与实时镜面。</p><p><a href="https://threejs.org/examples/webgl_materials_car.html" target="_blank" rel="noopener">Three.js 官方示例 ↗</a><br><a href="https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6" target="_blank" rel="noopener">原模型页面与许可 ↗</a></p><small>本站发布者已确认拥有模型公开发布授权。<br>模型与品牌权利归原权利人；不以开源库许可替代模型许可。</small></dialog>
 <div id="expanded-wrap" hidden><div class="expanded-head"><span id="expanded-name">后视镜</span><button id="close-expanded">关闭 ×</button></div><div id="mirror-expanded"></div><p>实时后向镜像 · 与对应小窗口相同视角</p></div>`;
@@ -79,6 +81,16 @@ async function init(){
   const drivingUi=new DrivingUi($('#focus-toggle') as HTMLButtonElement);
   const session=new ExamSession();
   const parkingFeedback=new ParkingFeedback();
+  const audio=createAudioController();
+  let audioEvents:AudioEvent[]=[];
+  let audioRun=0,audioDeductions=0,audioUrgency=0,audioResult=false;
+  function syncAudioScene(){audio.setScene(session.state==='running'?(session.mode==='practice'?'practice':'exam'):session.state==='projects'?'menu':session.state==='briefing'?'briefing':session.state==='paused'?'paused':'result');}
+  function queueAudio(event:AudioEvent|undefined){if(event)audioEvents.push(event);}
+  function resetAudioRun(){audio.invalidate();audioEvents=[];audioRun++;audioDeductions=0;audioUrgency=0;audioResult=false;}
+  const unlockAudio=(event:Event)=>{if(event.isTrusted)void audio.unlock();};
+  document.addEventListener('pointerdown',unlockAudio,true);
+  document.addEventListener('keydown',unlockAudio,true);
+  document.addEventListener('click',event=>{if(!event.isTrusted)return;syncAudioScene();void audio.unlock();const target=event.target as HTMLElement;if(target.closest('button')&&!target.closest('[data-gear],#throttle,#brake,#audio-preview'))queueAudio({type:target.closest('.close-dialog,#close-expanded')?'ui-back':'ui-confirm'});});
   const look=new CockpitLook(renderer.domElement,()=>view!=='orbit'&&(session.state==='running'||session.state==='result'), $('#look-lock') as HTMLButtonElement, toast, ()=>view==='follow');
   $('#look-lock').onclick=()=>{void look.lock();renderer.domElement.focus({preventScroll:true});};
   $('#look-center').onclick=()=>{look.reset();toast('视角已回正');};
@@ -94,9 +106,9 @@ async function init(){
     if(action==='resume'){release();physics.clearAccumulator();session.resume();examUi.render();focusScene();toast(`已继续${session.mode==='practice'?'练习':'考试'} · 请重新按下驾驶键`);}
     if(action==='exit'){closeExpanded();release();session.exit();ground.setCourse(session.course);resetPose();drivingUi.setFocused(false);setView('orbit');$('#course-caption').textContent=`${session.course.number}　${session.course.name}考场`;examUi.render();}
   });
-  function pause(reason?:string){if(session.state!=='running')return;closeExpanded();release();physics.clearAccumulator();session.pause(reason);examUi.render();}
+  function pause(reason?:string){if(session.state!=='running')return;closeExpanded();release();physics.clearAccumulator();session.pause(reason);audioEvents=[];syncAudioScene();examUi.render();}
   function syncGear(){document.querySelectorAll<HTMLElement>('[data-gear]').forEach(b=>b.classList.toggle('active',b.dataset.gear===physics.gear));}
-  function requestGear(gear:Gear){if(session.state!=='running')return false;controls.manual(gear);if(!physics.setGear(gear)){toast(gear==='R'?'车辆仍在前进，请刹停后挂 R 档':gear==='D'?'车辆仍在倒退，请刹停后挂 D 档':'请先刹停车辆，再切换行驶方向');return false;}syncGear();return true;}
+  function requestGear(gear:Gear){if(session.state!=='running')return false;const oldGear=physics.gear;controls.manual(gear);if(!physics.setGear(gear)){queueAudio({type:'ui-reject'});toast(gear==='R'?'车辆仍在前进，请刹停后挂 R 档':gear==='D'?'车辆仍在倒退，请刹停后挂 D 档':'请先刹停车辆，再切换行驶方向');return false;}syncGear();queueAudio(gearAudioEvent(oldGear,physics.gear));return true;}
   function openSettings(){if(session.state==='running')pause('设置已打开，关闭后请点击继续。');release();($('#settings-dialog') as HTMLDialogElement).showModal();}
   function syncSpeedSlider(el:HTMLInputElement){
     const value=settings.maxSpeeds[el.dataset.speedCourse as SpeedCourse];
@@ -106,6 +118,9 @@ async function init(){
   }
   function applySettings(next:Settings){
     settings=next;
+    audio.applySettings(settings);
+    ($('#setting-audio') as HTMLInputElement).checked=settings.audioEnabled;
+    document.querySelectorAll<HTMLInputElement>('[data-audio-volume]').forEach(el=>{const value=settings[el.dataset.audioVolume as 'masterVolume'|'musicVolume'|'vehicleVolume'|'cuesVolume'];el.value=String(value);el.style.setProperty('--speed-fill',`${value*100}%`);el.parentElement!.querySelector('output')!.textContent=`${Math.round(value*100)}%`;});
     document.querySelectorAll<HTMLInputElement>('[data-speed-course]').forEach(syncSpeedSlider);quality=settings.quality==='high';headlights=settings.headlights;mirrorsExpanded=settings.mirrorsExpanded;
     const color=PAINTS.find(item=>item.color===settings.paint)!;
     car.paint.color.set(settings.paint);$('#paint-name').textContent=color.name;
@@ -135,6 +150,9 @@ async function init(){
     };
     el.oninput=saveSpeed;el.onchange=saveSpeed;
   });
+  ($('#setting-audio') as HTMLInputElement).onchange=e=>{changeSettings({audioEnabled:(e.target as HTMLInputElement).checked});if(settings.audioEnabled)void audio.unlock();};
+  document.querySelectorAll<HTMLInputElement>('[data-audio-volume]').forEach(el=>{el.oninput=()=>changeSettings({[el.dataset.audioVolume!]:Number(el.value)});});
+  $('#audio-preview').onclick=()=>{if(!settings.audioEnabled){$('#audio-status').textContent='请先启用声音再试听。';return;}if(settings.masterVolume===0||settings.cuesVolume===0){$('#audio-status').textContent='总音量或提示音音量为 0，请提高音量后试听。';return;}$('#audio-status').textContent='正在请求试听…';void audio.unlock().then(async ok=>{$('#audio-status').textContent=ok&&await audio.preview()?'已播放原创提示音。':'声音未能播放，请再次点击试听或检查浏览器播放权限。';});};
   $('#settings-running').onclick=openSettings;
   function setView(next:'orbit'|'cockpit'|'follow'){release();view=next;orbit.enabled=view==='orbit';look.reset();$('#look-lock').hidden=view!=='cockpit'||!matchMedia('(pointer:fine)').matches;$('#look-center').hidden=view==='orbit';document.querySelectorAll('button[data-view]').forEach(e=>e.classList.toggle('active',(e as HTMLElement).dataset.view===view));$('#scene-help').textContent=view==='orbit'?'拖动环绕 · 滚轮缩放':view==='cockpit'?'悬停转头 · 按住上下拖动':'随车移动 · 上下拖动 · 双击回正';document.body.dataset.view=view;mirrors.showSurfaces(view==='cockpit');$('.mirror-strip').hidden=view==='cockpit';if(view==='cockpit')closeExpanded();
     if(view==='orbit'&&session.state!=='result'&&(session.mode==='practice'||!session.active)){const b=session.mode==='practice'?practiceBounds:session.course.bounds;const center=new THREE.Vector3((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);const extent=Math.max(b.maxX-b.minX,b.maxZ-b.minZ);orbit.maxDistance=session.mode==='practice'?145:80;orbit.target.copy(center);camera.position.copy(center).add(session.mode==='practice'?new THREE.Vector3(-extent*.06,extent*.92,extent*.12):new THREE.Vector3(-extent*.2,extent*1.7,extent*.8));camera.fov=48;camera.updateProjectionMatrix();orbit.update();}
@@ -186,8 +204,8 @@ async function init(){
   pad.onpointermove=e=>{if(steeringOwner===e.pointerId)dragSteer=THREE.MathUtils.clamp((startX-e.clientX)/95,-1,1);};
   const endSteering=(e:PointerEvent)=>{if(steeringOwner!==e.pointerId)return;steeringOwner=null;dragSteer=0;};
   pad.onpointerup=pad.onpointercancel=pad.onlostpointercapture=endSteering;
-  function resetPose(){parkingFeedback.reset();ground.setParkingFeedback(false);examUi.clearParkingSuccess();const start=session.mode==='practice'?{x:0,z:0,startYaw:0}: {...session.course.start,startYaw:session.course.startYaw};physics.reset(start.x,start.z,start.startYaw);car.root.position.set(start.x,0,start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),start.startYaw);prevPos.copy(car.root.position);}
-  function reset(firstStart=false){closeExpanded();release();drivingUi.setFocused(true);if(!firstStart)session.retry();else session.start();ground.setCourse(session.course);if(session.mode==='practice')ground.setPractice();ground.setParkingFeedback(false);physics.clearAccumulator();resetPose();$('#course-caption').textContent=session.mode==='practice'?'05　自由练习场':`${session.course.number}　${session.course.name}考场`;setView(firstStart?'cockpit':view);examUi.render();focusScene();syncGear();}
+  function resetPose(){resetAudioRun();parkingFeedback.reset();ground.setParkingFeedback(false);examUi.clearParkingSuccess();const start=session.mode==='practice'?{x:0,z:0,startYaw:0}: {...session.course.start,startYaw:session.course.startYaw};physics.reset(start.x,start.z,start.startYaw);car.root.position.set(start.x,0,start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),start.startYaw);prevPos.copy(car.root.position);}
+  function reset(firstStart=false){closeExpanded();release();drivingUi.setFocused(true);if(!firstStart)session.retry();else session.start();ground.setCourse(session.course);if(session.mode==='practice')ground.setPractice();ground.setParkingFeedback(false);physics.clearAccumulator();resetPose();$('#course-caption').textContent=session.mode==='practice'?'05　自由练习场':`${session.course.number}　${session.course.name}考场`;setView(firstStart?'cockpit':view);examUi.render();focusScene();syncGear();syncAudioScene();queueAudio({type:'startup',key:`${audioRun}`});}
   $('#reset').onclick=()=>reset();
   $('#lights-toggle').onclick=()=>{changeSettings({headlights:!headlights});toast(headlights?'车灯已开启':'车灯已关闭');};
   $('#quality').onclick=()=>changeSettings({quality:quality?'smooth':'high'});
@@ -202,7 +220,7 @@ async function init(){
   $('#loading').classList.add('loaded');setTimeout(()=>$('#loading').remove(),700);
   let last=performance.now(),mirrorTime=0,frames=0,fpsTime=last;
   const forward=new THREE.Vector3(),target=new THREE.Vector3(),delta=new THREE.Vector3();
-  const debug={session,requestGear,view,physics,car,mirrors,renderer,scene,camera,setView,reset,drivingUi,look,settingsStore,controls,ready:true};(window as unknown as {larria:typeof debug}).larria=debug;
+  const debug={audio,session,requestGear,view,physics,car,mirrors,renderer,scene,camera,setView,reset,drivingUi,look,settingsStore,controls,ready:true};(window as unknown as {larria:typeof debug}).larria=debug;
   renderer.setAnimationLoop(now=>{
     const dt=Math.min((now-last)/1000,.05);last=now;
     const modal=!!document.querySelector('dialog[open]');
@@ -212,19 +230,25 @@ async function init(){
     if(modal&&session.state==='running')pause(`弹窗已打开，关闭后可继续${session.mode==='practice'?'练习':'考试'}。`);
     const intent={forward:keys.has('KeyW')||keys.has('ArrowUp'),reverse:keys.has('KeyS')||keys.has('ArrowDown'),brake:modal||held.brake.size>0||keys.has('Space'),touchThrottle:held.throttle.size>0,steer:steeringOwner!==null?dragSteer:keyboardSteer||steerCurrent};
     physics.maxSpeed=settings.maxSpeeds[session.mode==='practice'?'practice':session.course.id as SpeedCourse]/3.6;
-    const resolved=session.state==='running'?controls.resolve(intent,{gear:physics.gear,speed:physics.speed},settings.realisticControls,gear=>{const changed=physics.setGear(gear);if(changed)syncGear();return changed;}):null;
+    const resolved=session.state==='running'?controls.resolve(intent,{gear:physics.gear,speed:physics.speed},settings.realisticControls,gear=>{const oldGear=physics.gear;const changed=physics.setGear(gear);if(changed){syncGear();queueAudio(gearAudioEvent(oldGear,physics.gear));}return changed;}):null;
     const input=resolved?.input??{throttle:0,brake:0,steer:0};
-    if(resolved?.rejected)toast('车辆尚未停稳，正在制动；停稳后自动换向');
+    if(resolved?.rejected){queueAudio({type:'ui-reject'});toast('车辆尚未停稳，正在制动；停稳后自动换向');}
     if(session.state==='running')physics.update(dt,input,()=>{
       const q=physics.chassis.quaternion;
       if(session.mode==='exam')session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0,steering:physics.steering});
       if(session.mode==='exam'){
         const event=parkingFeedback.capture(session.rules,session.result);
-        if(event)examUi.notifyParkingComplete(event);
+        if(event){examUi.notifyParkingComplete(event);queueAudio({type:'parking',key:`${audioRun}:${session.rules.parkCount}`});}
+        while(audioDeductions<session.rules.deductions.length){queueAudio({type:'penalty',key:`${audioRun}:${audioDeductions}`});audioDeductions++;}
+        if(isParkingCourse(session.course)){const remaining=session.course.totalLimit-session.rules.totalElapsed;const ratio=remaining/session.course.totalLimit;const level=ratio<=.1?2:ratio<=.2?1:0;if(level>audioUrgency){audioUrgency=level;queueAudio({type:'warning',key:`${audioRun}:${level}`});}}
       }
       if(session.state==='result'){release();examUi.render();return false;}
     });
     car.root.position.set(physics.chassis.position.x,physics.chassis.position.y-.65,physics.chassis.position.z);car.root.quaternion.set(physics.chassis.quaternion.x,physics.chassis.quaternion.y,physics.chassis.quaternion.z,physics.chassis.quaternion.w);
+    syncAudioScene();
+    if(session.state==='result'&&!audioResult){audioResult=true;queueAudio({type:session.result?.passed?(session.scope==='series'&&!session.hasNext?'complete':'pass'):'fail',key:`${audioRun}`});}
+    audio.updateVehicle({speed:physics.speed,gear:physics.gear,throttle:input.throttle,brake:input.brake,inside:view==='cockpit'});
+    audio.playEvents(audioEvents);audioEvents=[];
     ground.setParkingFeedback(session.mode==='exam'&&parkingFeedback.active);
     examUi.updateStatus();
     car.update(session.state==='running'?physics.speed:0,physics.steering,input.brake,input.throttle,physics.gear,dt);

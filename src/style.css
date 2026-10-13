@@ -185,6 +185,7 @@ body[data-view="follow"] #viewport canvas{touch-action:none}
 @media(prefers-reduced-motion:reduce){.project-card,.mode-card{transition:none}}
 
 #exam-overlay{scroll-padding-bottom:70px}
+.settings-audio{margin-top:24px;border-top:1px solid #b8cbb2;padding-top:20px}.settings-audio h3{font-size:17px;color:#355343;margin:0 0 8px}.settings-audio>p{font-size:12px;line-height:1.7;color:#61725c}.settings-audio .speed-control output{flex-basis:46px}
 
 #deduction-toast{top:322px}
 @media(max-width:780px){#deduction-toast{top:355px;max-width:205px}}

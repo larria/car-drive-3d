@@ -31,10 +31,10 @@ export default defineConfig({
       ]),
     },
     workbox: {
-      globPatterns: ['**/*.{html,js,css,ico,png,svg,woff,woff2,glb,gltf,bin,wasm}'],
+      globPatterns: ['**/*.{html,js,css,ico,png,svg,woff,woff2,glb,gltf,bin,wasm,mp3}'],
       maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       navigateFallback: 'index.html',
-      navigateFallbackDenylist: [/\/(?:models|draco|assets|icons)\//],
+      navigateFallbackDenylist: [/\/(?:models|draco|assets|icons|audio)\//],
       cleanupOutdatedCaches: true,
       skipWaiting: false,
       clientsClaim: true,
