@@ -50,10 +50,12 @@ function sweepSteps(a: ExamPose,b: ExamPose): number {
 // Reference speed thresholds are px/frame; 7mm/px at 60Hz converts them to m/s.
 export const PARK_DIRECTION_EPS = .01 * .007 * 60;
 export const PARK_STOP_EPS = .05 * .007 * 60;
-export const TOTAL_LIMIT = 30, OUTSIDE_STOP_LIMIT = 2;
+export const OUTSIDE_STOP_LIMIT = 2;
 const phases = ['前进','倒车','前进','倒车','前进'] as const;
 export class ExamRules {
-  constructor(readonly course:CourseDefinition=RIGHT_ANGLE) {}
+  constructor(readonly course:CourseDefinition=RIGHT_ANGLE, startingScore=100) { this.reset(startingScore); }
+  private validParking=false;
+  get parkingFeedback(){return this.validParking;}
   score=100;
   deductions: ExamDeduction[]=[];
   private bodyContact=false;
@@ -138,14 +140,17 @@ export class ExamRules {
     if(corners.every(q=>distance(q)<=epsilon))this.crossedFinishOutward=false;
     return allowed&&this.crossedFinishOutward&&(premature||corners.every(q=>distance(q)>epsilon));
   }
-  reset(){
-    this.score=100;this.deductions=[];this.bodyContact=false;this.wheelContact=false;this.parkingAttempt=false;this.boundaryPose=null;
+  reset(startingScore=100){
+    if(!Number.isFinite(startingScore)||startingScore<0||startingScore>100)throw new RangeError('起始分须在 0 到 100 之间');
+    this.validParking=false;
+    this.score=startingScore;this.deductions=[];this.bodyContact=false;this.wheelContact=false;this.parkingAttempt=false;this.boundaryPose=null;
     this.startedW=false;this.startedMoving=false;this.countedParkPhases.clear();this.totalElapsed=0;this.outsideStopped=0;
     this.parkCount=0;this.parked=false;this.reversed=false;this.forwardAfterParked=false;
     this.dirPhase=0;this.dirPhaseStarted=false;
     this.previousPose=null;this.crossedFinishOutward=false;this.prematureFinish=false;
   }
   step(p: ExamPose, dt=1/60): ExamResult | null {
+    this.validParking=false;
     if(![p.x,p.z,p.yaw,p.speed,p.steering??0,dt].every(Number.isFinite)||dt<0||Math.max(Math.abs(p.x),Math.abs(p.z))>1e6||Math.abs(p.yaw)>1e6||Math.abs(p.steering??0)>1e6)return this.fail('车辆状态数值异常，考试不合格');
     if(this.boundaryPose&&sweepSteps(this.boundaryPose,p)>MAX_SWEEP_STEPS)return this.fail('车辆位移超出检测预算，考试不合格');
     if(p.throttle)this.startedW=true;
@@ -191,8 +196,8 @@ export class ExamRules {
         }else return this.fail('操作顺序错误，考试不合格');
       }
       if(this.startedW){
-        this.totalElapsed=Math.min(TOTAL_LIMIT,this.totalElapsed+dt);
-        if(this.totalElapsed>=TOTAL_LIMIT)return this.fail('30 秒内未完成，考试不合格');
+        this.totalElapsed+=dt;
+        if(this.totalElapsed>course.totalLimit+1e-9)return this.fail(`${course.totalLimit} 秒内未完成，考试不合格`);
         const zone=course.parkZone;
         const inZone=corners.every(c=>c.x>=zone.minX&&c.x<=zone.maxX&&c.z>=zone.minZ&&c.z<=zone.maxZ);
         if(Math.abs(p.speed)<PARK_STOP_EPS&&!inZone)this.outsideStopped=Math.min(OUTSIDE_STOP_LIMIT,this.outsideStopped+dt);
@@ -243,6 +248,7 @@ export class ExamRules {
         }
       }
       else if(!valid&&this.parked)this.parked=false;
+      this.validParking=valid&&(course.direction==='parallel'?this.reversed&&!this.forwardAfterParked:this.countedParkPhases.has(this.dirPhase)&&(this.dirPhase===1||this.dirPhase===3));
       const complete=this.parkCount>=course.requiredParks&&(course.direction==='parallel'||this.dirPhase===4&&this.dirPhaseStarted);
       if(this.finished(p,corners,!complete))
         return complete?this.result(true,course.passReason):this.fail(course.notParkedReason);

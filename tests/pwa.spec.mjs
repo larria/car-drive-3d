@@ -5,8 +5,11 @@ import ts from 'typescript';
 async function mockedPwa(page) {
   await page.route('**/pwa-fixture.html', route => route.fulfill({ contentType: 'text/html', body: '<footer><span>练习场</span></footer><button id="toast" role="status" hidden></button>' }));
   await page.goto('pwa-fixture.html');
+  // Exercise the shipping stylesheet rather than a mocked layout.
+  await page.addStyleTag({ content: readFileSync(new URL('../src/style.css', import.meta.url), 'utf8') });
   const source = readFileSync(new URL('../src/pwa.ts', import.meta.url), 'utf8')
     .replace("import { registerSW } from 'virtual:pwa-register';", 'const registerSW = window.mockRegisterSW;')
+    .replace("import { createBusy } from './busy';", readFileSync(new URL('../src/busy.ts', import.meta.url), 'utf8'))
     .replaceAll('export ', '')
     .replaceAll('import.meta.env.PROD', 'true')
     .replaceAll('__APP_VERSION__', JSON.stringify('test'));
@@ -16,10 +19,10 @@ async function mockedPwa(page) {
     window.mockRegisterSW = options => {
       window.pwaCallbacks = options;
       options.onRegisteredSW('sw.js', { waiting: {}, update: async () => {} });
-      return async () => { window.updateCalls++; };
+      return async () => { window.updateCalls++; if (window.activationError) throw new Error(window.activationError); };
     };
   });
-  await page.addScriptTag({ content: ts.transpile(source, { target: ts.ScriptTarget.ES2022 }) + `\nconst notify = text => {const toast = document.querySelector('#toast'); toast.hidden = false; toast.textContent = text; toast.onclick = () => toast.hidden = true;}; initPwa(notify); initPwa(notify);` });
+  await page.addScriptTag({ content: ts.transpile(source, { target: ts.ScriptTarget.ES2022 }) + `\nconst notify = text => {const toast = document.querySelector('#toast'); toast.hidden = false; toast.classList.add('show'); toast.textContent = text; toast.onclick = () => { toast.hidden = true; toast.classList.remove('show'); };}; initPwa(notify); initPwa(notify);` });
 }
 
 test('updates require consent and stationary telemetry; external activation never auto reloads', async ({ page }) => {
@@ -45,6 +48,90 @@ test('updates require consent and stationary telemetry; external activation neve
   // Another tab's controller change without this tab's consent must not refresh it.
   await page.evaluate(() => { window.larria.physics.speed = 0; window.pwaCallbacks.onNeedReload(); });
   await expect(page.locator('#pwa-dialog')).toContainText('页面尚未刷新');
+  expect(await page.evaluate(() => window.updateCalls)).toBe(1);
+});
+
+for (const width of [320, 390, 1024]) test(`real CSS update actions and loading stay stable at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 360 });
+  await mockedPwa(page);
+  await page.evaluate(() => { window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); });
+  const actions = page.locator('.pwa-actions');
+  const before = await actions.boundingBox();
+  const buttons = await page.locator('.pwa-controls button').all();
+  const first = await buttons[0].boundingBox();
+  const second = await buttons[1].boundingBox();
+  expect(first.y).toBe(second.y);
+  expect(first.x + first.width).toBeLessThanOrEqual(second.x);
+  await buttons[0].click();
+  await expect(page.locator('.pwa-controls')).toBeHidden();
+  await expect(actions.locator('.busy-status')).toBeVisible();
+  await expect(page.locator('#pwa-dialog')).toHaveAttribute('aria-busy', 'true');
+  const after = await actions.boundingBox();
+  expect(after).toEqual(before);
+  expect(after.y + after.height).toBeLessThanOrEqual(360);
+  await page.evaluate(() => document.querySelector('.pwa-controls button').click());
+  expect(await page.evaluate(() => window.updateCalls)).toBe(1);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  expect(await actions.locator('.busy-ring').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+});
+
+test('activation errors and original timeout restore same-height controls', async ({ page }) => {
+  await page.clock.install();
+  await mockedPwa(page);
+  await page.evaluate(() => { window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); });
+  await page.getByRole('button', { name: '停车后更新' }).click();
+  await page.clock.fastForward(15000);
+  await expect(page.locator('#pwa-dialog')).toHaveAttribute('data-update-state', 'error');
+  await expect(page.locator('#pwa-dialog')).toContainText('激活超时');
+  await expect(page.getByRole('button', { name: '停车后更新' })).toBeEnabled();
+  await page.evaluate(() => { window.activationError = '测试激活错误'; });
+  await page.getByRole('button', { name: '停车后更新' }).click();
+  await expect(page.locator('#pwa-dialog')).toContainText('更新失败：测试激活错误');
+  await expect(page.getByRole('button', { name: '停车后更新' })).toBeEnabled();
+});
+
+test('hidden page blocks consent and activated waiting state remains escapable', async ({ page }) => {
+  await mockedPwa(page);
+  await page.evaluate(() => { window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); Object.defineProperty(document, 'hidden', { configurable: true, value: true }); });
+  await page.getByRole('button', { name: '停车后更新' }).click();
+  expect(await page.evaluate(() => window.updateCalls)).toBe(0);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: false }); });
+  await page.getByRole('button', { name: '停车后更新' }).click();
+  await page.evaluate(() => { document.body.dataset.exam = 'paused'; window.pwaCallbacks.onNeedReload(); });
+  await expect(page.locator('.pwa-controls')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#pwa-dialog')).toBeHidden();
+  await page.evaluate(() => { document.body.dataset.exam = 'projects'; });
+  await page.locator('#pwa-update').click();
+  await expect(page.getByRole('button', { name: '停车后更新' })).toBeVisible();
+  expect(await page.evaluate(() => window.updateCalls)).toBe(1);
+});
+
+test('activation completed while hidden restores safe confirmation on visibility return without reload', async ({ page }) => {
+  await mockedPwa(page);
+  await page.evaluate(() => { window.larria.physics.speed = 0; window.pwaCallbacks.onNeedRefresh(); });
+  await page.getByRole('button', { name: '停车后更新' }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    window.pwaCallbacks.onNeedReload();
+  });
+  await expect(page.locator('.pwa-controls')).toBeHidden();
+  await expect(page.locator('#pwa-dialog')).toContainText('页面尚未刷新');
+  await page.evaluate(() => {
+    document.body.dataset.exam = 'paused';
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.locator('.pwa-controls')).toBeHidden();
+  await page.evaluate(() => {
+    document.body.dataset.exam = 'projects';
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.locator('#pwa-dialog')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByRole('button', { name: '停车后更新' })).toBeVisible();
+  await expect(page.locator('#pwa-dialog')).toContainText('请确认');
+  expect(page.url()).toContain('pwa-fixture.html');
   expect(await page.evaluate(() => window.updateCalls)).toBe(1);
 });
 

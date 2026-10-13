@@ -22,7 +22,12 @@ export function parallelParking(length: number = VEHICLE.length, width: number =
     polygon:road,roads:[road,bay],boundaries,penaltyLines:boundaries.map((segment,i)=>({segment,kind:i>=4?'obstacle':'marking',reason:i===4?'车头越线，考试不合格':i===5?'车尾越线，考试不合格':'车辆越出边界线'})),
     guides:[seg(right,-L/2,right,L/2)],center:[],finish:seg(-right,finishZ,right,finishZ),finishExitNormal:p(0,-1),
     parkZone:{minX:right,maxX:outside,minZ:-L/2,maxZ:L/2,heading:0,tolerance:Math.PI/12},
-    bounds:boundsOf([...road,...bay]),requiredParks:1,notParkedReason:'未完成侧方入库，考试不合格',
+    bounds:boundsOf([...road,...bay]),totalLimit:90,requiredParks:1,notParkedReason:'未完成侧方入库，考试不合格',
+    annotations:[
+      {role:'start',text:'START',anchor:p(0,startZ),offset:p(-right-1.8,0),width:2.6,depth:.6,leader:true},
+      {role:'finish',text:'FINISH',anchor:p(0,finishZ),offset:p(-right-1.8,0),width:2.6,depth:.6,leader:true},
+      {role:'parking',text:'侧方车位',anchor:p(outside,0),offset:p(2,0),width:3,depth:.6,leader:true},
+    ],
     direction:'parallel',passReason:'车辆顺利通过侧方位停车',
   };
 }

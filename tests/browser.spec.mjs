@@ -28,18 +28,24 @@ test('S failures, pause, switching ownership, stable resources and narrow UI',as
  await test.info().attach('course-resources',{body:JSON.stringify(memory,null,2),contentType:'application/json'});
 });
 test('complete actual driving pass using only held keyboard and screen steering',async({page})=>{
- await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);await page.keyboard.press('w');expect(await state(page)).toBe('projects');await start(page);
+ await page.clock.install();
+ await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);await page.keyboard.press('w');expect(await state(page)).toBe('projects');
+ // Freeze the browser clock, not the vehicle: real keyboard/pointer events feed
+ // the normal animation loop and rules at fixed feedback intervals. CDP latency
+ // must not turn a sampled steering decision into hundreds of ms of blind travel.
+ await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));await start(page);
  await expect(page.locator('button[data-view].active')).toHaveCount(1);await expect(page.locator('button[data-view="cockpit"]')).toHaveClass('active');
  const box=await page.locator('#steering-pad').boundingBox(),cx=box.x+box.width/2,cy=box.y+box.height/2;
- await page.mouse.move(cx,cy);await page.mouse.down();await page.keyboard.down('w');let turning=false,straight=false;
+ await page.mouse.move(cx,cy);await page.mouse.down();await page.keyboard.down('w');let turning=false,straight=false;const trajectory=[];
  for(let i=0;i<1200;i++){
-  const p=await page.evaluate(()=>{const p=window.larria.physics;return{x:p.chassis.position.x,z:p.chassis.position.z,yaw:2*Math.atan2(p.chassis.quaternion.y,p.chassis.quaternion.w),state:window.larria.session.state};});
+  const p=await page.evaluate(()=>{const p=window.larria.physics;return{x:p.chassis.position.x,z:p.chassis.position.z,yaw:2*Math.atan2(p.chassis.quaternion.y,p.chassis.quaternion.w),speed:p.speed,steering:p.steering,throttle:p.throttle,state:window.larria.session.state,reason:window.larria.session.result?.reason};});trajectory.push(p);
   if(p.state!=='running')break;if(p.z<1.48)turning=true;if(p.yaw< -1.53)straight=true;
   const steer=turning?(straight?Math.max(-1,Math.min(1,(-Math.PI/2-p.yaw)*3)):-1):Math.max(-.4,Math.min(.4,(p.x+.65)*.6-p.yaw*2));
-  await page.mouse.move(cx-steer*95,cy);await page.waitForTimeout(18);
+  await page.mouse.move(cx-steer*95,cy);await page.clock.runFor(17);
  }
+ await test.info().attach('real-input-trajectory',{body:JSON.stringify(trajectory,null,2),contentType:'application/json'});
  await page.keyboard.up('w');await page.mouse.up();await expect(page.locator('.result-inspector h1')).toHaveText('✓ 考试通过');await expect(page.locator('body')).toHaveAttribute('data-result','passed');await page.screenshot({path:'artifacts/exam-pass.png'});
- const frozen=await pos(page);await page.keyboard.down('w');await page.waitForTimeout(300);await page.keyboard.up('w');expect(await pos(page)).toEqual(frozen);
+ const frozen=await pos(page);await page.keyboard.down('w');await page.clock.runFor(300);await page.keyboard.up('w');expect(await pos(page)).toEqual(frozen);
  await page.locator('[data-exam="retry"]:visible').click();expect((await pos(page))[2]).toBe(9);expect(await page.evaluate(()=>window.larria.session.rules.startedW)).toBe(false);
 });
 test('three failure reasons, keyboard gears, pause, help and explicit resume',async({page})=>{
@@ -137,7 +143,7 @@ test('parking projects open their own rules and default cockpit, free remains in
  for(const [id,title] of [['parallel-parking','侧方位停车'],['reverse-garage','倒车入库']]){
   await page.locator(`[data-exam="select:${id}"]`).click();
   await expect(page.locator('.briefing-page h1')).toHaveText(title);
-  await expect(page.locator('.exam-rules')).toContainText('30 秒');
+  await expect(page.locator('.exam-rules')).toContainText(`${id==='parallel-parking'?90:210} 秒`);
   await expect(page.locator('.exam-rules')).toContainText('2 秒');
   await expect(page.locator('.briefing-page .course-diagram')).toContainText('↑');
   await page.locator('[data-exam="start"]').click();
@@ -171,7 +177,7 @@ test('free practice drives forward, stops and reverses without scoring; switchin
  await page.locator('[data-exam="pause"]:visible').click();const frozen=await pos(page);
  await page.waitForTimeout(250);expect(await pos(page)).toEqual(frozen);
  await expect(page.locator('.result-card h1')).toHaveText('练习已暂停');
- await page.locator('.result-card [data-exam="retry"]').click();expect((await pos(page))[2]).toBe(0);
+ await page.locator('.result-card [data-exam="retry"]').click();expect((await pos(page))[2]).toBeCloseTo(0,8);
  expect(await page.evaluate(()=>window.larria.session.mode)).toBe('practice');
  for(const selector of ['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:practice']){
   await page.locator('[data-exam="exit"]:visible').click();await page.locator(`[data-exam="${selector}"]`).click();
@@ -251,7 +257,7 @@ test('result inspection preserves frozen scene and permits only observation',asy
   const frozen=await pos(page);await page.locator('#look-center').click();
   await page.mouse.move(710,430);await page.mouse.down();await page.mouse.move(710,350,{steps:4});await page.mouse.up();
   expect(await page.evaluate(()=>window.larria.look.followPitch)).toBeLessThan(-.1);expect(await pos(page)).toEqual(frozen);
-  await expect(page.locator('.result-score')).toContainText('0');await expect(page.locator('.deduction-list')).toContainText('100');
+  await expect(page.locator('.result-score')).toHaveCount(0);await expect(page.locator('.deduction-list')).toHaveCount(0);
  });
 
 
@@ -286,4 +292,20 @@ test('legacy void pointer lock accepts delayed event but rejects event after can
  await page.evaluate(()=>{const canvas=document.querySelector('#viewport canvas');window.__lockElement=null;window.__lockExits=0;Object.defineProperty(document,'pointerLockElement',{configurable:true,get:()=>window.__lockElement});canvas.requestPointerLock=()=>undefined;document.exitPointerLock=()=>{window.__lockExits++;window.__lockElement=null;document.dispatchEvent(new Event('pointerlockchange'));};window.__grantLock=()=>{window.__lockElement=canvas;document.dispatchEvent(new Event('pointerlockchange'));};});
  await page.locator('#look-lock').click();await page.waitForTimeout(50);await page.evaluate(()=>window.__grantLock());expect(await page.evaluate(()=>window.larria.look.locked)).toBe(true);expect(await page.evaluate(()=>window.__lockExits)).toBe(0);
  await page.locator('#look-lock').click();await page.locator('#look-lock').click();await page.locator('button[data-view="orbit"]').click();await page.evaluate(()=>window.__grantLock());expect(await page.evaluate(()=>window.larria.look.locked)).toBe(false);expect(await page.evaluate(()=>window.__lockExits)).toBe(2);
+});
+
+// UI flow uses explicit rule-result replay; not a four-project real-driving pass.
+test('series confirmation and whole-round R; single hides scores',async({page})=>{
+ await open(page);await start(page);await expect(page.locator('.exam-score')).toHaveCount(0);
+ await page.locator('[data-exam="exit"]:visible').click();await page.locator('[data-exam="select:series"]').click();await page.locator('[data-exam="start"]').click();
+ await expect(page.locator('.exam-score')).toContainText('1 / 4');
+ await page.evaluate(()=>{const s=window.larria.session;s.rules.step=()=>({passed:true,score:80,reason:'规则结果回放',deductions:[]});});
+ await expect(page.locator('[data-exam="next"]')).toBeVisible();await expect(page.locator('.result-inspector h1')).toHaveText('第 1 项完成');
+ await page.locator('[data-exam="next"]').click();expect(await state(page)).toBe('briefing');expect(await page.evaluate(()=>window.larria.session.rules.score)).toBe(80);
+ await page.locator('[data-exam="start"]').click();await expect(page.locator('.exam-score')).toContainText('2 / 4');await page.keyboard.press('r');
+ expect(await page.evaluate(()=>[window.larria.session.projectIndex,window.larria.session.rules.score,window.larria.session.ledger.length])).toEqual([0,100,0]);
+ await page.locator('[data-exam="exit"]:visible').click();await page.locator('[data-exam="select:parallel-parking"]').click();
+ await expect(page.locator('.scoring-note')).toHaveCount(0);await page.locator('[data-exam="start"]').click();await expect(page.locator('.exam-timer')).toHaveAttribute('aria-valuenow','90');
+ await page.waitForTimeout(150);await expect(page.locator('.exam-timer')).toHaveAttribute('aria-valuenow','90');
+ await page.locator('[data-exam="pause"]:visible').click();const elapsed=await page.evaluate(()=>window.larria.session.rules.totalElapsed);await page.waitForTimeout(150);expect(await page.evaluate(()=>window.larria.session.rules.totalElapsed)).toBe(elapsed);
 });

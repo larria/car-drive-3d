@@ -82,7 +82,7 @@ input:focus-visible,select:focus-visible{outline:2px solid #527b65;outline-offse
 #pwa-dialog h2{font-size:23px}
 #pwa-dialog p{line-height:1.8}
 #pwa-dialog button{border:1px solid #c4cec0;border-radius:7px;padding:11px 16px;background:#f4f5ee;font-size:12px;min-height:42px}
-#pwa-dialog button:nth-last-child(2){background:#355343;color:#f7f7ed}
+#pwa-dialog .pwa-controls button:first-child{background:#355343;color:#f7f7ed}
 #pwa-dialog button:disabled{opacity:.55}
 @media(max-width:780px){.briefing-top{flex-direction:column;gap:12px}.briefing-top-actions{width:100%;padding-top:0}.briefing-top-actions .exam-primary{flex:1;order:-1}.briefing-top-actions .exam-secondary{white-space:nowrap}.briefing-page h1{font-size:clamp(30px,8vw,40px)}.briefing-grid{margin-top:20px}}
 @media(max-height:700px) and (min-width:781px){.briefing-top{margin-top:6px}.briefing-top h1{font-size:30px}.briefing-grid{margin-top:20px}}
@@ -109,6 +109,39 @@ body[data-result="failed"]{--result-glow:202 139 78}
 @media(prefers-reduced-motion:reduce){body[data-result]::after{animation:none}}
 
 footer .pwa-update-group{display:inline-flex;align-items:center;gap:9px;white-space:nowrap}footer .pwa-update-group .app-version{margin-left:0}
+
+/* Single remaining-time meter; text conveys urgency independently of colour. */
+.exam-timer{display:flex;align-items:center;gap:9px;color:#253d35;--timer-color:#527b65}
+.timer-ring{width:48px;height:48px;flex:0 0 48px;overflow:visible}
+.timer-track{fill:none;stroke:#c4cec0;stroke-width:2}
+.timer-progress{fill:none;stroke:var(--timer-color);stroke-width:2;stroke-linecap:round;transform:rotate(-90deg);transform-origin:24px 24px}
+.timer-face{position:relative;width:48px;height:48px;flex:0 0 48px}
+#exam-hud .timer-seconds{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:600;color:#253d35;font-variant-numeric:tabular-nums}
+.parking-status:has(.exam-timer){align-items:center}
+.timer-caption small{display:block}
+@media(max-width:780px){#exam-hud:has(.exam-timer) .parking-status{max-width:none;gap:3px 8px;align-items:center}#exam-hud:has(.exam-timer) .exam-actions{max-width:88px}.timer-face,.timer-ring{width:40px;height:40px;flex-basis:40px}.exam-timer{flex-shrink:0}}
+.timer-caption{font-size:10px;line-height:1.6;white-space:nowrap}
+.timer-caption [data-timer-warning]{display:block;font-size:9px}
+.exam-timer[data-urgency="warning"]{--timer-color:#865c3c}
+.exam-timer[data-urgency="critical"]{--timer-color:#8b433c}
+@media(max-width:780px){.exam-timer{gap:6px}.timer-caption{font-size:9px}.timer-caption [data-timer-warning]{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.timer-progress{transition:none}}
+
+/* Stable inline feedback, independent of the model's full-screen loader. */
+.busy-status{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-size:12px;line-height:1.5;color:#355343}
+.busy-ring{width:17px;height:17px;flex:0 0 17px;border:1.5px solid #c4cec0;border-top-color:currentColor;border-radius:50%;animation:busy-spin .9s linear infinite}
+@keyframes busy-spin{to{transform:rotate(360deg)}}
+#pwa-dialog{max-height:calc(100dvh - 24px);padding:24px;overflow:hidden}
+#pwa-dialog[open]{align-items:stretch;gap:17px}
+#pwa-dialog h2{flex-shrink:0}
+#pwa-dialog p{height:87px;flex:0 1 87px;min-height:0;overflow:auto;overscroll-behavior:contain}
+.pwa-actions{height:46px;flex:0 0 46px;display:grid;align-items:center}
+.pwa-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;height:46px}
+#pwa-dialog button{padding:10px 8px;min-width:0;height:46px;white-space:nowrap;transform:none;transition:background .2s,color .2s}
+.pwa-actions>.busy-status{height:46px;width:100%}
+#pwa-dialog[data-update-state="waiting"] .busy-ring{animation:none;border-color:#527b65}
+#pwa-update{min-width:64px}#pwa-update .busy-status{font-size:8px;gap:4px}#pwa-update .busy-ring{width:12px;height:12px;flex-basis:12px}
+@media(prefers-reduced-motion:reduce){.busy-ring{animation:none;border-top-width:3px}}
 
 body[data-view="follow"] #viewport canvas{touch-action:none}
 .exam-score{display:block;margin-top:7px;font-size:11px;font-variant-numeric:tabular-nums}.exam-score b{font-size:18px;font-weight:650}.exam-score small{font-size:9px;color:#657769}

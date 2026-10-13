@@ -36,13 +36,19 @@ describe('reference parking field data, not inferred driving-exam rules',()=>{
 });
 
 describe('reference parking checks at a fixed 60Hz',()=>{
+ it.each([[parallel,90,startParallel],[garage,210,startGarage]] as const)('allows the exact project time limit and fails one substep later', (course,limit,start)=>{
+  expect(course.totalLimit).toBe(limit);
+  const r=new ExamRules(course),p={...start(),speed:1};r.startedW=true;r.totalElapsed=limit-1/60;
+  expect(r.step(p)).toBeNull();expect(r.totalElapsed).toBeCloseTo(limit);
+  expect(r.step(p)?.reason).toContain(`${limit} 秒`);
+ });
  it('latches throttle for timers, freezes before first press and after pause/result',()=>{
   const s=new ExamSession();s.select(parallel);s.start();for(let i=0;i<90;i++)s.step(startParallel());expect(s.rules.totalElapsed).toBe(0);
   s.step({...startParallel(),throttle:true});
   expect(s.rules.totalElapsed).toBeCloseTo(1/60);
   s.pause();for(let i=0;i<150;i++)s.step(startParallel());expect(s.rules.totalElapsed).toBeCloseTo(1/60);
   s.resume();for(let i=0;i<20;i++)s.step(startParallel());expect(s.rules.outsideStopped).toBeCloseTo(21/60);
-  s.start();expect(s.rules.totalElapsed).toBe(0);expect(s.rules.outsideStopped).toBe(0);expect(s.rules.startedW).toBe(false);
+  s.retry();expect(s.rules.totalElapsed).toBe(0);expect(s.rules.outsideStopped).toBe(0);expect(s.rules.startedW).toBe(false);
  });
  it('exempts a fully contained car from outside stop timer even when its heading is wrong',()=>{
   const r=new ExamRules(parallel),p=parkedParallel();r.step({...p,yaw:Math.PI,throttle:true});
@@ -97,9 +103,9 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   for(let i=0;i<2;i++)if(r.step(p)?.reason?.includes('停车超 2 秒'))return;
   throw new Error('Cumulative parking timer did not expire at 2 seconds');
  });
- it('30s and direction checks precede wall and finish checks in the same substep',()=>{
-  const r=new ExamRules(parallel),p=startParallel();r.totalElapsed=30-1/60;r.startedW=true;
-  expect(r.step({...p,speed:1})?.reason).toContain('30 秒');
+ it('project timeout and direction checks precede wall and finish checks in the same substep',()=>{
+  const r=new ExamRules(parallel),p=startParallel();r.totalElapsed=parallel.totalLimit;r.startedW=true;
+  expect(r.step({...p,speed:1})?.reason).toContain('90 秒');
   r.reset();r.reversed=true;expect(r.step({...p,speed:1})?.reason).toContain('倒车后');
   r.reset();r.outsideStopped=2-1/60;r.startedW=true;expect(r.step(p)?.reason).toContain('停车超 2 秒');
   r.reset();expect(r.step({...p,x:parallel.parkZone.maxX,z:0,speed:1})?.reason).toContain('前轮越出');expect(r.score).toBe(0);

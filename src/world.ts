@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { RIGHT_ANGLE } from './courses/right-angle';
+import { getCourseAnnotations } from './course-annotations';
+import { isParkingBaySegment } from './parking-feedback';
 import { PRACTICE_ISLANDS } from './practice-layout';
 import { isParkingCourse, type CourseDefinition, type Point } from './courses/course-definition';
 
@@ -110,8 +112,9 @@ export function createWorld(scene: THREE.Scene) {
 
   // Typography is painted, not a UI overlay. Shared atlases keep numbered bays inexpensive.
   const font = '"Arial", "Helvetica Neue", "PingFang SC", sans-serif';
-  function groundText(text: string, x: number, z: number, width: number, depth: number, color = '#d5d6cd') {
+  function groundText(text: string, x: number, z: number, width: number, depth: number, color = '#d5d6cd', backed = false) {
     const { el, ctx } = canvas(1024, 256);
+    if (backed) { ctx.fillStyle = '#394240'; ctx.fillRect(0, 0, 1024, 256); }
     ctx.fillStyle = color;
     ctx.font = `700 190px ${font}`;
     ctx.textAlign = 'center';
@@ -127,7 +130,15 @@ export function createWorld(scene: THREE.Scene) {
   }
   // Course-owned resources are replaced without disturbing shared campus assets.
   let courseGroup = new THREE.Group();
+  let parkingFeedback: { lines: { material: THREE.MeshStandardMaterial; color: THREE.Color }[]; fill: THREE.MeshBasicMaterial } | null = null;
+  function setParkingFeedback(valid: boolean) {
+    if (!parkingFeedback) return;
+    for (const line of parkingFeedback.lines) line.material.color.copy(valid ? new THREE.Color('#79b58d') : line.color);
+    parkingFeedback.fill.color.set(valid ? '#79b58d' : '#92ba9f');
+    parkingFeedback.fill.opacity = valid ? .24 : .12;
+  }
   function replaceCourseGroup(name: string) {
+    parkingFeedback = null;
     const geometries=new Set<THREE.BufferGeometry>(), materials=new Set<THREE.Material>(), textures=new Set<THREE.Texture>();
     courseGroup.traverse(object=>{
       if(object instanceof THREE.Mesh){
@@ -160,7 +171,14 @@ export function createWorld(scene: THREE.Scene) {
       mesh.scale.set(Math.hypot(dx,dz),.008,.065);
       mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;island.add(mesh);
     };
-    if(parking)course.penaltyLines.forEach(({segment:[a,b],kind})=>paint(a,b,kind==='obstacle'?guideMaterial:edgeMaterial));
+    const bayLines: { material: THREE.MeshStandardMaterial; color: THREE.Color }[] = [];
+    if(parking)course.penaltyLines.forEach(({segment,kind})=>{
+      const base=kind==='obstacle'?guideMaterial:edgeMaterial;
+      // Dedicated materials preserve obstacle colours and every shared road/guide line.
+      const mat=isParkingBaySegment(segment,course.parkZone)?base.clone():base;
+      if(mat!==base)bayLines.push({material:mat,color:mat.color.clone()});
+      paint(...segment,mat);
+    });
     else course.boundaries.forEach(([a,b])=>paint(a,b));
     paint(...course.startMark,markMaterial);
     const dashed=(a:Point,b:Point,step:number,dash:number,mat:THREE.Material)=>{
@@ -176,6 +194,7 @@ export function createWorld(scene: THREE.Scene) {
       const fill=new THREE.Mesh(new THREE.PlaneGeometry(z.maxX-z.minX,z.maxZ-z.minZ),
         new THREE.MeshBasicMaterial({color:'#92ba9f',transparent:true,opacity:.12,depthWrite:false}));
       fill.rotation.x=-Math.PI/2;fill.position.set((z.minX+z.maxX)/2,.027,(z.minZ+z.maxZ)/2);island.add(fill);
+      parkingFeedback={lines:bayLines,fill:fill.material};
     }else{
       dashed(...course.finish,.45,.24,markMaterial);
       // Carry dash phase across sampled segments instead of restarting every chord.
@@ -194,11 +213,15 @@ export function createWorld(scene: THREE.Scene) {
     // Reparent each freshly painted label so its canvas texture is course-owned.
     const label=(text:string,x:number,z:number,w:number,h:number)=>{groundText(text,x,z,w,h);island.add(world.children[world.children.length-1]);};
     label(`${course.label} / ${course.number}`,(course.bounds.minX+course.bounds.maxX)/2,course.bounds.minZ-2.5,8,1);
-    label('START',course.start.x,course.start.z+(parking?Math.sign(course.start.z)*2.5:2.5),2.6,.6);
-    const [f1,f2]=course.finish;
-    label('FINISH',(f1.x+f2.x)/2+(parking&&course.id==='parallel-parking'?0:3),(f1.z+f2.z)/2+(parking&&course.id==='parallel-parking'?-1:0),2.6,.6);
-    if(parking){const z=course.parkZone;label(course.id==='parallel-parking'?'侧方车位':'倒车入库',(z.minX+z.maxX)/2,(z.minZ+z.maxZ)/2,z.maxX-z.minX,.55);
-      course.reverseControlLines?.forEach(({segment:[a,b],label:text})=>label(text,(a.x+b.x)/2,(a.z+b.z)/2,2,.4));
+    for (const annotation of getCourseAnnotations(course)) {
+      const {position,anchor,width,depth}=annotation;
+      if(annotation.leader){
+        const dx=position.x-anchor.x,dz=position.z-anchor.z;
+        const ratio=Math.max(Math.abs(dx)/(width/2+.12),Math.abs(dz)/(depth/2+.12));
+        if(ratio>1)paint(anchor,{x:position.x-dx/ratio,z:position.z-dz/ratio},markMaterial);
+      }
+      groundText(annotation.text,position.x,position.z,width,depth,'#e4e3d8',true);
+      island.add(world.children[world.children.length-1]);
     }
     return island;
   }
@@ -213,6 +236,7 @@ export function createWorld(scene: THREE.Scene) {
       const island=drawCourse(placement.course,courseGroup);
       island.position.set(placement.x,0,placement.z);
     }
+    parkingFeedback = null;
     // Subtle painted central wayfinding; each unchanged island is visual only.
     const guide=new THREE.MeshStandardMaterial({color:'#819582',roughness:1});
     const box=new THREE.BoxGeometry(1,1,1);
@@ -317,5 +341,5 @@ export function createWorld(scene: THREE.Scene) {
     world.add(mesh);
   }
   world.updateMatrixWorld(true);
-  return { walls, setCourse, setPractice };
+  return { walls, setCourse, setPractice, setParkingFeedback };
 }

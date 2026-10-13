@@ -37,6 +37,6 @@ describe('S rules and session isolation',()=>{
  });
  it('retry preserves course, pause freezes rules, switching drops latch and old result',()=>{
   const session=new ExamSession();session.select(s);session.start();session.step(pose({throttle:true,speed:1}));session.pause();session.step(pose());expect(session.result).toBeNull();session.resume();session.step(pose());expect(session.result?.passed).toBe(false);
-  session.start();expect(session.course).toBe(s);expect(session.rules.startedW).toBe(false);expect(session.result).toBeNull();session.exit();session.select(RIGHT_ANGLE);expect(session.rules.course).toBe(RIGHT_ANGLE);expect(session.rules.step({...pose(),z:9})).toBeNull();session.select(s);expect(session.rules.course).toBe(s);expect(session.result).toBeNull();
+  session.retry();expect(session.course).toBe(s);expect(session.rules.startedW).toBe(false);expect(session.result).toBeNull();session.exit();session.select(RIGHT_ANGLE);expect(session.rules.course).toBe(RIGHT_ANGLE);expect(session.rules.step({...pose(),z:9})).toBeNull();session.select(s);expect(session.rules.course).toBe(s);expect(session.result).toBeNull();
  });
 });

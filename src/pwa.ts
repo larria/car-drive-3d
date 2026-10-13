@@ -1,4 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
+import { createBusy } from './busy';
 
 interface InstallPrompt extends Event {
   prompt(): Promise<void>;
@@ -58,14 +59,41 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
   close.type = 'button';
   close.textContent = '关闭';
   close.onclick = () => dialog.close();
-  dialog.append(heading, message, confirm, close);
+  const actions = document.createElement('div');
+  actions.className = 'pwa-actions';
+  const controls = document.createElement('div');
+  controls.className = 'pwa-controls';
+  const busy = createBusy('正在更新，请稍候');
+  busy.hidden = true;
+  controls.append(confirm, close);
+  actions.append(controls, busy);
+  dialog.append(heading, message, actions);
+  type UpdateState = 'idle' | 'activating' | 'waiting' | 'error';
+  let updateState: UpdateState = 'idle';
+  function setUpdateState(state: UpdateState) {
+    updateState = state;
+    dialog.dataset.updateState = state;
+    dialog.setAttribute('aria-busy', String(state === 'activating'));
+    const pending = state === 'activating' || state === 'waiting';
+    controls.hidden = pending;
+    busy.hidden = !pending;
+    busy.setAttribute('aria-busy', String(state === 'activating'));
+    busy.lastElementChild!.textContent = state === 'waiting' ? '更新已激活，等待安全确认' : '正在更新，请稍候';
+    if (pending && dialog.contains(document.activeElement)) {
+      actions.tabIndex = -1;
+      actions.focus();
+    }
+  }
+  setUpdateState('idle');
   document.body.append(dialog);
   function tell(text: string, update = false) {
     check.title = text;
     if (!update) { notify(text); return; }
     heading.textContent = '发现应用更新';
     message.textContent = text;
-    confirm.hidden = false;
+    if (!['activating', 'waiting'].includes(updateState) || (reloadPending && isSafeToRefresh() && !document.hidden)) {
+      setUpdateState(updateState === 'error' ? 'error' : 'idle');
+    }
     if (isSafeToRefresh() && !document.hidden && !dialog.open) dialog.showModal();
   }
   function errorText(error: unknown) {
@@ -127,7 +155,8 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
       window.location.reload();
     } else {
       consent = false;
-      tell('新版本已激活，但页面尚未刷新。请停车后确认更新。', true);
+      setUpdateState('waiting');
+      tell('新版本已激活，但页面尚未刷新。请退出驾驶并停车，返回页面后确认更新；可按 Esc 关闭此窗口。', true);
     }
   }
   const updateSW = registerSW({
@@ -157,21 +186,24 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
   });
   confirm.onclick = async () => {
     if (activating) return;
-    if (!isSafeToRefresh()) { message.textContent = '车辆仍在行驶或驾驶状态未就绪。请完全停车后重试。'; return; }
+    if (!isSafeToRefresh() || document.hidden) { message.textContent = '车辆仍在行驶、驾驶状态未就绪或页面不可见。请完全停车并返回页面后重试。'; return; }
     consent = true;
     if (reloadPending) { reloadWithConsent(); return; }
     if (!registration?.waiting) {
       consent = false;
-      tell('暂时没有待激活版本，请重新检查更新。');
+      setUpdateState('error');
+      tell('暂时没有待激活版本，请重新检查更新。', true);
       return;
     }
     activating = true;
     confirm.disabled = true;
+    setUpdateState('activating');
     message.textContent = '正在激活更新，请保持停车…';
     activationTimer = setTimeout(() => {
       consent = false;
       activating = false;
       confirm.disabled = false;
+      setUpdateState('error');
       tell('更新激活超时，页面未刷新。请检查连接后重试。', true);
     }, 15000);
     try { await updateSW(); } catch (error) {
@@ -179,6 +211,7 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
       activating = false;
       consent = false;
       confirm.disabled = false;
+      setUpdateState('error');
       tell(`更新失败：${errorText(error)}`, true);
     }
   };
@@ -186,14 +219,27 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
   let checking = false;
   async function checkForUpdate(manual: boolean) {
     if (checking) return;
+    if (reloadPending) {
+      // Activation is complete. A safe visibility return restores confirmation,
+      // not the consent that was explicitly cleared while waiting.
+      if (isSafeToRefresh() && !document.hidden) {
+        consent = false;
+        setUpdateState('idle');
+        tell('新版本已激活。页面尚未刷新，请确认“停车后更新”。', true);
+      } else if (manual) {
+        tell('新版本已激活，正在等待退出驾驶、停车并返回页面；随后仍需确认刷新。', true);
+      }
+      return;
+    }
     if (!navigator.onLine) { if (manual) tell('当前处于离线状态，已缓存的练习仍可使用。联网后再检查更新。'); return; }
     if (!registration) {
       if (manual) tell(registrationError ? `离线服务不可用：${registrationError}` : '离线服务正在初始化，请稍后重试。');
       return;
     }
-    if (reloadPending) { if (manual) tell('新版本已激活，请停车后确认刷新。', true); return; }
     checking = true;
     check.disabled = true;
+    check.setAttribute('aria-busy', 'true');
+    check.replaceChildren(createBusy('正在检查'));
     try {
       await registration.update();
       const worker = registration.installing;
@@ -216,6 +262,7 @@ export function initPwa(notify: (text: string) => void = () => {}): void {
     } finally {
       checking = false;
       check.disabled = false;
+      check.setAttribute('aria-busy', 'false');
       check.textContent = waiting || reloadPending ? '更新可用' : '检查更新';
     }
   }
