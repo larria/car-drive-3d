@@ -16,6 +16,7 @@ import {VEHICLE} from './vehicle-config';
 import {createSettingsStore, PAINTS, type Settings, SPEED_DEFAULTS, SPEED_MIN, speedMax, type SpeedCourse} from './settings';
 import {DrivingControls} from './driving-controls';
 import {practiceBounds} from './practice-layout';
+import {ParkingFeedback} from './parking-feedback';
 
 const settingsStore=createSettingsStore();
 const app=document.querySelector<HTMLDivElement>('#app')!;
@@ -77,6 +78,7 @@ async function init(){
   const prevPos=new THREE.Vector3();
   const drivingUi=new DrivingUi($('#focus-toggle') as HTMLButtonElement);
   const session=new ExamSession();
+  const parkingFeedback=new ParkingFeedback();
   const look=new CockpitLook(renderer.domElement,()=>view!=='orbit'&&(session.state==='running'||session.state==='result'), $('#look-lock') as HTMLButtonElement, toast, ()=>view==='follow');
   $('#look-lock').onclick=()=>{void look.lock();renderer.domElement.focus({preventScroll:true});};
   $('#look-center').onclick=()=>{look.reset();toast('视角已回正');};
@@ -184,7 +186,7 @@ async function init(){
   pad.onpointermove=e=>{if(steeringOwner===e.pointerId)dragSteer=THREE.MathUtils.clamp((startX-e.clientX)/95,-1,1);};
   const endSteering=(e:PointerEvent)=>{if(steeringOwner!==e.pointerId)return;steeringOwner=null;dragSteer=0;};
   pad.onpointerup=pad.onpointercancel=pad.onlostpointercapture=endSteering;
-  function resetPose(){const start=session.mode==='practice'?{x:0,z:0,startYaw:0}: {...session.course.start,startYaw:session.course.startYaw};physics.reset(start.x,start.z,start.startYaw);car.root.position.set(start.x,0,start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),start.startYaw);prevPos.copy(car.root.position);}
+  function resetPose(){parkingFeedback.reset();ground.setParkingFeedback(false);examUi.clearParkingSuccess();const start=session.mode==='practice'?{x:0,z:0,startYaw:0}: {...session.course.start,startYaw:session.course.startYaw};physics.reset(start.x,start.z,start.startYaw);car.root.position.set(start.x,0,start.z);car.root.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0),start.startYaw);prevPos.copy(car.root.position);}
   function reset(firstStart=false){closeExpanded();release();drivingUi.setFocused(true);if(!firstStart)session.retry();else session.start();ground.setCourse(session.course);if(session.mode==='practice')ground.setPractice();ground.setParkingFeedback(false);physics.clearAccumulator();resetPose();$('#course-caption').textContent=session.mode==='practice'?'05　自由练习场':`${session.course.number}　${session.course.name}考场`;setView(firstStart?'cockpit':view);examUi.render();focusScene();syncGear();}
   $('#reset').onclick=()=>reset();
   $('#lights-toggle').onclick=()=>{changeSettings({headlights:!headlights});toast(headlights?'车灯已开启':'车灯已关闭');};
@@ -216,10 +218,14 @@ async function init(){
     if(session.state==='running')physics.update(dt,input,()=>{
       const q=physics.chassis.quaternion;
       if(session.mode==='exam')session.step({x:physics.chassis.position.x,z:physics.chassis.position.z,yaw:Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z)),speed:physics.speed,throttle:input.throttle>0,steering:physics.steering});
+      if(session.mode==='exam'){
+        const event=parkingFeedback.capture(session.rules,session.result);
+        if(event)examUi.notifyParkingComplete(event);
+      }
       if(session.state==='result'){release();examUi.render();return false;}
     });
     car.root.position.set(physics.chassis.position.x,physics.chassis.position.y-.65,physics.chassis.position.z);car.root.quaternion.set(physics.chassis.quaternion.x,physics.chassis.quaternion.y,physics.chassis.quaternion.z,physics.chassis.quaternion.w);
-    ground.setParkingFeedback(session.mode==='exam'&&session.rules.parkingFeedback);
+    ground.setParkingFeedback(session.mode==='exam'&&parkingFeedback.active);
     examUi.updateStatus();
     car.update(session.state==='running'?physics.speed:0,physics.steering,input.brake,input.throttle,physics.gear,dt);
     delta.copy(car.root.position).sub(prevPos);prevPos.copy(car.root.position);

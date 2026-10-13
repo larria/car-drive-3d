@@ -130,12 +130,19 @@ export function createWorld(scene: THREE.Scene) {
   }
   // Course-owned resources are replaced without disturbing shared campus assets.
   let courseGroup = new THREE.Group();
-  let parkingFeedback: { lines: { material: THREE.MeshStandardMaterial; color: THREE.Color }[]; fill: THREE.MeshBasicMaterial } | null = null;
+  const parkingSage = new THREE.Color('#79b58d');
+  let parkingFeedback: {
+    lines: { material: THREE.MeshStandardMaterial; color: THREE.Color }[];
+    fill: THREE.MeshBasicMaterial;
+    auxiliary: THREE.MeshBasicMaterial;
+    valid: boolean;
+  } | null = null;
   function setParkingFeedback(valid: boolean) {
-    if (!parkingFeedback) return;
-    for (const line of parkingFeedback.lines) line.material.color.copy(valid ? new THREE.Color('#79b58d') : line.color);
-    parkingFeedback.fill.color.set(valid ? '#79b58d' : '#92ba9f');
-    parkingFeedback.fill.opacity = valid ? .24 : .12;
+    if (!parkingFeedback || parkingFeedback.valid === valid) return;
+    parkingFeedback.valid = valid;
+    for (const line of parkingFeedback.lines) line.material.color.copy(valid ? parkingSage : line.color);
+    parkingFeedback.fill.color.set(valid ? '#789b80' : '#68716d');
+    parkingFeedback.auxiliary.color.set(valid ? '#b2d8b5' : '#c0c5b8');
   }
   function replaceCourseGroup(name: string) {
     parkingFeedback = null;
@@ -164,10 +171,10 @@ export function createWorld(scene: THREE.Scene) {
     });
     const paintGeometry=new THREE.BoxGeometry(1,1,1);
     const edgeMaterial=material('#e4e3d8'), guideMaterial=material('#dab851'), markMaterial=material('#92ba9f');
-    const paint=(a:Point,b:Point,mat:THREE.Material=edgeMaterial)=>{
+    const paint=(a:Point,b:Point,mat:THREE.Material=edgeMaterial,y=.04)=>{
       const dx=b.x-a.x,dz=b.z-a.z;
       const mesh=new THREE.Mesh(paintGeometry,mat);
-      mesh.position.set((a.x+b.x)/2,.04,(a.z+b.z)/2);
+      mesh.position.set((a.x+b.x)/2,y,(a.z+b.z)/2);
       mesh.scale.set(Math.hypot(dx,dz),.008,.065);
       mesh.rotation.y=-Math.atan2(dz,dx);mesh.receiveShadow=true;island.add(mesh);
     };
@@ -191,10 +198,42 @@ export function createWorld(scene: THREE.Scene) {
       course.guides.forEach(([a,b])=>dashed(a,b,.55,.26,guideMaterial));
       course.reverseControlLines?.forEach(({segment})=>paint(...segment,markMaterial));
       const z=course.parkZone;
+      // Opaque paint on separate heights: no coplanar alpha blending or flashing.
       const fill=new THREE.Mesh(new THREE.PlaneGeometry(z.maxX-z.minX,z.maxZ-z.minZ),
-        new THREE.MeshBasicMaterial({color:'#92ba9f',transparent:true,opacity:.12,depthWrite:false}));
-      fill.rotation.x=-Math.PI/2;fill.position.set((z.minX+z.maxX)/2,.027,(z.minZ+z.maxZ)/2);island.add(fill);
-      parkingFeedback={lines:bayLines,fill:fill.material};
+        new THREE.MeshBasicMaterial({color:'#68716d'}));
+      const cx=(z.minX+z.maxX)/2,cz=(z.minZ+z.maxZ)/2;
+      fill.name='parking-feedback:fill';
+      fill.rotation.x=-Math.PI/2;fill.position.set(cx,.027,cz);island.add(fill);
+      const auxiliary=new THREE.MeshBasicMaterial({color:'#c0c5b8'});
+      const helper=new THREE.Group();helper.name='parking-feedback:visual-only';island.add(helper);
+      const helperPaint=(a:Point,b:Point)=>{
+        paint(a,b,auxiliary,.05);
+        helper.add(island.children[island.children.length-1]);
+      };
+      // Inset from the real boundary, including the open mouth. These dashes
+      // are only an auxiliary frame, never a new penalty line or collision wall.
+      const inset=.18;
+      const corners:Point[]=[
+        {x:z.minX+inset,z:z.minZ+inset},{x:z.maxX-inset,z:z.minZ+inset},
+        {x:z.maxX-inset,z:z.maxZ-inset},{x:z.minX+inset,z:z.maxZ-inset},
+      ];
+      for(let i=0;i<corners.length;i++){
+        const a=corners[i],b=corners[(i+1)%corners.length];
+        const length=Math.hypot(b.x-a.x,b.z-a.z);
+        const at=(d:number)=>({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length});
+        for(let d=0;d<length;d+=.55)helperPaint(at(d),at(Math.min(d+.27,length)));
+      }
+      // Same yaw convention as the car: heading zero points toward negative Z.
+      const forward={x:-Math.sin(z.heading),z:-Math.cos(z.heading)};
+      const side={x:Math.cos(z.heading),z:-Math.sin(z.heading)};
+      const arrowLength=Math.min(z.maxX-z.minX,z.maxZ-z.minZ)*.38;
+      const tip={x:cx+forward.x*arrowLength/2,z:cz+forward.z*arrowLength/2};
+      helperPaint({x:cx-forward.x*arrowLength/2,z:cz-forward.z*arrowLength/2},tip);
+      for(const sign of [-1,1])helperPaint(tip,{
+        x:tip.x-forward.x*.38+side.x*.28*sign,
+        z:tip.z-forward.z*.38+side.z*.28*sign,
+      });
+      parkingFeedback={lines:bayLines,fill:fill.material,auxiliary,valid:false};
     }else{
       dashed(...course.finish,.45,.24,markMaterial);
       // Carry dash phase across sampled segments instead of restarting every chord.

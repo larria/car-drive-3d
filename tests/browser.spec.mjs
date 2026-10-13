@@ -29,7 +29,7 @@ test('S failures, pause, switching ownership, stable resources and narrow UI',as
 });
 test('complete actual driving pass using only held keyboard and screen steering',async({page})=>{
  await page.clock.install();
- await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);await page.keyboard.press('w');expect(await state(page)).toBe('projects');
+ await open(page);await expect(page.locator('.project-card')).toHaveCount(4);await page.keyboard.press('w');expect(await state(page)).toBe('projects');
  // Freeze the browser clock, not the vehicle: real keyboard/pointer events feed
  // the normal animation loop and rules at fixed feedback intervals. CDP latency
  // must not turn a sampled steering decision into hundreds of ms of blind travel.
@@ -139,7 +139,7 @@ test('Chrome CDP three-finger throttle, steering and cockpit look remain indepen
 });
 
 test('parking projects open their own rules and default cockpit, free remains independent',async({page})=>{
- await open(page);await expect(page.locator('.project-placeholder:disabled')).toHaveCount(0);
+ await open(page);await expect(page.locator('.project-card')).toHaveCount(4);
  for(const [id,title] of [['parallel-parking','侧方位停车'],['reverse-garage','倒车入库']]){
   await page.locator(`[data-exam="select:${id}"]`).click();
   await expect(page.locator('.briefing-page h1')).toHaveText(title);
@@ -308,4 +308,65 @@ test('series confirmation and whole-round R; single hides scores',async({page})=
  await expect(page.locator('.scoring-note')).toHaveCount(0);await page.locator('[data-exam="start"]').click();await expect(page.locator('.exam-timer')).toHaveAttribute('aria-valuenow','90');
  await page.waitForTimeout(150);await expect(page.locator('.exam-timer')).toHaveAttribute('aria-valuenow','90');
  await page.locator('[data-exam="pause"]:visible').click();const elapsed=await page.evaluate(()=>window.larria.session.rules.totalElapsed);await page.waitForTimeout(150);expect(await page.evaluate(()=>window.larria.session.rules.totalElapsed)).toBe(elapsed);
+});
+
+
+test('six entrances follow four equal singles then prominent series and free across responsive sizes',async({page})=>{
+ await open(page);
+ const entrances=page.locator('.single-projects button, .project-modes button');
+ expect(await entrances.evaluateAll(els=>els.map(el=>el.dataset.exam))).toEqual(['select','select:s-curve','select:parallel-parking','select:reverse-garage','select:series','select:practice']);
+ await expect(page.locator('.project-page')).not.toContainText('已开放');
+ await expect(page.locator('.mode-series')).toContainText('80 分合格');
+ await expect(page.locator('.mode-practice')).toContainText('不评分');
+ await page.locator('[data-exam="select"]').focus();
+ for(const id of ['select:s-curve','select:parallel-parking','select:reverse-garage','select:series','select:practice']){await page.keyboard.press('Tab');await expect(page.locator(`[data-exam="${id}"]`)).toBeFocused();}
+ for(const [width,height,columns] of [[1440,900,2],[1024,768,2],[768,900,2],[480,800,1],[375,812,1],[320,640,1],[844,390,2]]){
+  await page.setViewportSize({width,height});
+  expect(await page.locator('.single-projects').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(columns);
+  const sizes=await page.locator('.project-card').evaluateAll(els=>els.map(el=>Math.round(el.getBoundingClientRect().width)));expect(new Set(sizes).size).toBe(1);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(width);
+  await page.locator('#exam-overlay').evaluate(el=>el.scrollTop=el.scrollHeight);await expect(page.locator('[data-exam="select:practice"]')).toBeInViewport();
+  const bottom=await page.locator('[data-exam="select:practice"]').evaluate(el=>el.getBoundingClientRect().bottom),footer=await page.locator('footer').evaluate(el=>el.getBoundingClientRect().top);expect(bottom).toBeLessThanOrEqual(footer);
+  await page.screenshot({path:`artifacts/entrances-${width}-${height}.png`});
+ }
+});
+
+test('homepage thumbnails retain real briefing geometry with text left and maps right',async({page})=>{
+ await open(page);await expect(page.locator('#loading')).toBeHidden();
+ await expect(page.locator('.project-road')).toHaveCount(0);
+ const cards=page.locator('.project-card');await expect(cards.locator('.project-thumbnail svg')).toHaveCount(4);
+ const maps=await cards.locator('svg').evaluateAll(els=>els.map(el=>el.innerHTML));
+ for(const [index,id] of ['select','select:s-curve','select:parallel-parking','select:reverse-garage'].entries()){
+  await page.locator(`[data-exam="${id}"]`).click();
+  expect(await page.locator('.briefing-page .course-diagram').innerHTML()).toBe(maps[index]);
+  await page.locator('[data-exam="exit"]:visible').click();
+ }
+ for(const [width,height] of [[1440,1000],[375,812]]){
+  await page.setViewportSize({width,height});await page.locator('#exam-overlay').evaluate(el=>el.scrollTop=0);
+  const boxes=await cards.evaluateAll(els=>els.map(el=>{const c=el.getBoundingClientRect(),t=el.querySelector('.project-copy').getBoundingClientRect(),g=el.querySelector('svg').getBoundingClientRect();return {textRight:t.right,mapLeft:g.left,mapRight:g.right,cardRight:c.right,mapWidth:g.width,mapHeight:g.height};}));
+  for(const box of boxes){expect(box.mapLeft).toBeGreaterThanOrEqual(box.textRight);expect(box.mapRight).toBeLessThanOrEqual(box.cardRight);expect(box.mapWidth).toBeGreaterThanOrEqual(100);expect(box.mapHeight).toBeGreaterThanOrEqual(130);}
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(width);
+  await page.screenshot({path:`artifacts/home-real-geometry-${width}.png`});
+ }
+});
+
+// Explicit rule-state replay verifies presentation/event delivery only, NOT a parking driving pass.
+test('parking rule steps and success event remain cockpit-visible without stealing focus',async({page})=>{
+ await page.clock.install();await open(page);await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+ for(const [id,total] of [['parallel-parking',3],['reverse-garage',6]]){
+  await page.locator(`[data-exam="select:${id}"]`).click();await page.locator('[data-exam="start"]').click();
+  await page.clock.runFor(200);await expect(page.locator('#parking-step .step-index')).toHaveText(`1/${total}`);
+  await page.evaluate(()=>{const s=window.larria.session;s.rules.step=()=>{if(s.course.id==='parallel-parking'&&!s.rules.deductions.length)s.rules.deductions.push({points:10,reason:'可继续轻扣 UI 回放',elapsed:0});s.rules.parkCount=1;return null;};document.querySelector('#viewport canvas').focus();});
+  await page.clock.runFor(200);await expect(page.locator('#parking-success')).toContainText(`入库完成 · 1/${id==='parallel-parking'?1:2}`);
+  await expect(page.locator('[data-parking="count"]')).toHaveText('1');
+  if(id==='parallel-parking'){await expect(page.locator('#deduction-toast')).toBeVisible();await expect(page.locator('#parking-success')).toBeVisible();}
+  await expect(page.locator('button[data-view="cockpit"]')).toHaveClass(/active/);
+  await expect(page.locator('#viewport canvas')).toBeFocused();
+  await page.setViewportSize({width:320,height:640});
+  const overlap=await page.evaluate(()=>{const r=document.querySelector('#parking-success').getBoundingClientRect();return ['#steering-pad','#throttle','#brake'].some(s=>{const c=document.querySelector(s).getBoundingClientRect();return r.left<c.right&&r.right>c.left&&r.top<c.bottom&&r.bottom>c.top;});});expect(overlap).toBe(false);
+  await page.clock.runFor(3100);await expect(page.locator('#parking-success')).toBeHidden();await expect(page.locator('[data-parking="count"]')).toHaveText('1');
+  await page.locator('[data-exam="pause"]:visible').click();await expect(page.locator('#parking-step')).toBeHidden();await page.locator('[data-exam="resume"]').click();await expect(page.locator('#parking-success')).toBeHidden();
+  await page.locator('[data-exam="exit"]:visible').click();await page.setViewportSize({width:1280,height:720});
+ }
+ await start(page);await expect(page.locator('#parking-step')).toBeHidden();await expect(page.locator('#parking-success')).toBeHidden();
 });

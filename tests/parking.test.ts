@@ -62,7 +62,7 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   // The reference allows 15° by heading, but this car cannot physically fit
   // inside this bay at that angle; geometry is checked independently first.
   r.step({...p,yaw:Math.PI/12});expect(r.parkCount).toBe(0);
-  r.step(p);expect(r.parkCount).toBe(1);
+  r.step({...p,speed:-.1});r.step(p);expect(r.parkCount).toBe(1);
   r.step({...p,speed:PARK_STOP_EPS});expect(r.parked).toBe(false);
   r.step(p);expect(r.parkCount).toBe(1); // same parking phase cannot re-arm
  });
@@ -70,7 +70,7 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   const r=new ExamRules(parallel);r.step({...startParallel(),speed:-PARK_DIRECTION_EPS});expect(r.reversed).toBe(false);
   r.step({...startParallel(),speed:-PARK_DIRECTION_EPS-.00001});expect(r.reversed).toBe(true);
   expect(r.step({...startParallel(),speed:PARK_DIRECTION_EPS+.001})?.reason).toContain('倒车后入库前');
-  r.reset();r.step(parkedParallel());r.step({...parkedParallel(),speed:PARK_DIRECTION_EPS+.01});expect(r.forwardAfterParked).toBe(false);r.step({...startParallel(),speed:1});
+  r.reset();r.step({...parkedParallel(),speed:-.1});r.step(parkedParallel());r.step({...parkedParallel(),speed:PARK_DIRECTION_EPS+.01});expect(r.forwardAfterParked).toBe(false);r.step({...startParallel(),speed:1});
   expect(r.step({...startParallel(),speed:-.5})?.reason).toContain('出库后不得再倒车');
  });
  it('permits garage strict forward-reverse-forward-reverse-forward and requires motion in prior phase',()=>{
@@ -91,7 +91,7 @@ describe('reference parking checks at a fixed 60Hz',()=>{
   expect(r.step({...finish,x:11.1,speed:1})?.passed).toBe(true);
  });
  it('does not lock tiny contained parallel forward adjustments against reverse',()=>{
-  const r=new ExamRules(parallel),p=parkedParallel();r.step(p);
+  const r=new ExamRules(parallel),p=parkedParallel();r.step({...p,speed:-.1});r.step(p);
   r.step({...p,z:-.001,speed:.01});expect(r.forwardAfterParked).toBe(false);
   expect(r.step({...p,speed:-.01})).toBeNull();expect(r.parkCount).toBe(1);
  });

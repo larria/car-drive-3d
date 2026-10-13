@@ -1,10 +1,20 @@
 import { RIGHT_ANGLE } from './courses/right-angle';
-import { isParkingCourse, type CourseDefinition, type Point, type Segment } from './courses/course-definition';
+import { isParkingCourse, type CourseDefinition, type ParkingCourse, type Point, type Segment } from './courses/course-definition';
 import { VEHICLE, WHEEL_POSITIONS, WHEEL_RADIUS, WHEEL_WIDTH } from './vehicle-config';
 export const REVERSE_EPS = .0042, STOP_EPS = .021;
 export interface ExamPose { x: number; z: number; yaw: number; speed: number; throttle: boolean; steering?: number }
 export interface ExamDeduction { points: number; reason: string; elapsed: number }
 export interface ExamResult { passed: boolean; reason: string; score: number; deductions: ExamDeduction[] }
+export interface ParkingStep { index: number; total: number; title: string; detail: string }
+/** Same front-wheel centre geometry used by the scored direction transition. */
+export function parkingControlReady(p: ExamPose, control: NonNullable<ParkingCourse['reverseControlLines']>[number]): boolean {
+  const [a,b]=control.segment,dx=b.x-a.x,dz=b.z-a.z,len=dx*dx+dz*dz;
+  return len>0&&wheelPolygons(p).slice(0,2).every(poly=>{
+    const q={x:poly.reduce((n,v)=>n+v.x,0)/4,z:poly.reduce((n,v)=>n+v.z,0)/4};
+    const t=((q.x-a.x)*dx+(q.z-a.z)*dz)/len;
+    return (q.x-a.x)*control.normal.x+(q.z-a.z)*control.normal.z>1e-7&&t>=0&&t<=1;
+  });
+}
 export function intersects(a: Point,b: Point,c: Point,d: Point): boolean {
   const cross=(p:Point,q:Point,r:Point)=>(q.x-p.x)*(r.z-p.z)-(q.z-p.z)*(r.x-p.x);
   return cross(c,d,a)*cross(c,d,b)<0 && cross(a,b,c)*cross(a,b,d)<0;
@@ -56,6 +66,25 @@ export class ExamRules {
   constructor(readonly course:CourseDefinition=RIGHT_ANGLE, startingScore=100) { this.reset(startingScore); }
   private validParking=false;
   get parkingFeedback(){return this.validParking;}
+  private fullyInside=false;
+  get parkingFullyInside(){return this.fullyInside;}
+  get parkingStep(): ParkingStep | null {
+    const course=this.course;
+    if(!isParkingCourse(course))return null;
+    if(course.direction==='parallel'){
+      const index=this.parkCount>0?3:this.reversed?2:1;
+      const titles=['准备倒车入库','入库停稳','前进出库过终点'];
+      const details=['驶至合适位置，开始实际倒车。','整车进入库内、车身摆正后停稳。','前进驶出库位，两后轮越过终点线。'];
+      return {index,total:3,title:titles[index-1],detail:details[index-1]};
+    }
+    const controlIndex=this.dirPhase===0?0:1;
+    const control=course.reverseControlLines?.[controlIndex];
+    const ready=this.boundaryPose&&control?parkingControlReady(this.boundaryPose,control):false;
+    const index=this.dirPhase===0?(ready&&this.dirPhaseStarted?2:1):this.dirPhase===1?(this.parkCount>=1?3:2):this.dirPhase===2?(ready&&this.dirPhaseStarted?4:3):this.dirPhase===3?(this.parkCount>=2?5:4):this.fullyInside?5:6;
+    const titles=['前进两前轮越右控制线','首次倒车入库停稳','前进越左控制线','第二次倒车入库停稳','前进出库','越终点'];
+    const details=['实际前进，确认两前轮均越过右控制线。','倒车使整车进入库内，摆正并停稳。','前进驶向左侧，两前轮均越过左控制线。','再次倒车使整车进入库内，摆正并停稳。','前进驶出库位，不能再次倒车。','继续前进，两后轮越过终点线。'];
+    return {index,total:6,title:titles[index-1],detail:details[index-1]};
+  }
   score=100;
   deductions: ExamDeduction[]=[];
   private bodyContact=false;
@@ -142,7 +171,7 @@ export class ExamRules {
   }
   reset(startingScore=100){
     if(!Number.isFinite(startingScore)||startingScore<0||startingScore>100)throw new RangeError('起始分须在 0 到 100 之间');
-    this.validParking=false;
+    this.validParking=false;this.fullyInside=false;
     this.score=startingScore;this.deductions=[];this.bodyContact=false;this.wheelContact=false;this.parkingAttempt=false;this.boundaryPose=null;
     this.startedW=false;this.startedMoving=false;this.countedParkPhases.clear();this.totalElapsed=0;this.outsideStopped=0;
     this.parkCount=0;this.parked=false;this.reversed=false;this.forwardAfterParked=false;
@@ -150,7 +179,7 @@ export class ExamRules {
     this.previousPose=null;this.crossedFinishOutward=false;this.prematureFinish=false;
   }
   step(p: ExamPose, dt=1/60): ExamResult | null {
-    this.validParking=false;
+    this.validParking=false;this.fullyInside=false;
     if(![p.x,p.z,p.yaw,p.speed,p.steering??0,dt].every(Number.isFinite)||dt<0||Math.max(Math.abs(p.x),Math.abs(p.z))>1e6||Math.abs(p.yaw)>1e6||Math.abs(p.steering??0)>1e6)return this.fail('车辆状态数值异常，考试不合格');
     if(this.boundaryPose&&sweepSteps(this.boundaryPose,p)>MAX_SWEEP_STEPS)return this.fail('车辆位移超出检测预算，考试不合格');
     if(p.throttle)this.startedW=true;
@@ -161,6 +190,10 @@ export class ExamRules {
       if(course.rules.noStopAfterGo&&this.startedMoving&&Math.abs(p.speed)<STOP_EPS)return this.fail('中途停车，考试不合格');
     }
     const corners=bodyCorners(p);
+    if(isParkingCourse(course)){
+      const zone=course.parkZone;
+      this.fullyInside=corners.every(c=>c.x>=zone.minX&&c.x<=zone.maxX&&c.z>=zone.minZ&&c.z<=zone.maxZ);
+    }
     const hits=(line:Segment)=>touches(corners,line);
     const samples: ExamPose[]=[];
     const previous=this.boundaryPose;
@@ -187,10 +220,7 @@ export class ExamRules {
         else if(this.dirPhaseStarted&&this.dirPhase<phases.length-1&&current===phases[this.dirPhase+1]){
           if(reverse){
             const control=course.reverseControlLines?.[this.dirPhase===0?0:1];
-            if(control){const [a,b]=control.segment,dx=b.x-a.x,dz=b.z-a.z,len=dx*dx+dz*dz;
-              const fronts=wheelPolygons(p).slice(0,2).map(poly=>({x:poly.reduce((n,q)=>n+q.x,0)/4,z:poly.reduce((n,q)=>n+q.z,0)/4}));
-              if(!fronts.every(q=>{const t=((q.x-a.x)*dx+(q.z-a.z)*dz)/len;return (q.x-a.x)*control.normal.x+(q.z-a.z)*control.normal.z>1e-7&&t>=0&&t<=1;}))return this.fail('倒车前两前轮未越过'+control.label+'，考试不合格');
-            }
+            if(control&&!parkingControlReady(p,control))return this.fail('倒车前两前轮未越过'+control.label+'，考试不合格');
           }
           this.dirPhase++;this.dirPhaseStarted=true;
         }else return this.fail('操作顺序错误，考试不合格');
@@ -243,7 +273,7 @@ export class ExamRules {
       if(valid&&!this.parked){
         this.parked=true;
         const phase=course.direction==='parallel'?1:this.dirPhase;
-        if((course.direction==='parallel'||(phase===1||phase===3)&&this.dirPhaseStarted)&&!this.countedParkPhases.has(phase)){
+        if((course.direction==='parallel'?this.reversed&&!this.forwardAfterParked:(phase===1||phase===3)&&this.dirPhaseStarted)&&!this.countedParkPhases.has(phase)){
           this.countedParkPhases.add(phase);this.parkCount++;
         }
       }
